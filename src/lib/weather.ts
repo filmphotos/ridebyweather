@@ -88,40 +88,56 @@ class OpenWeatherProvider implements WeatherProvider {
 class OpenMeteoProvider implements WeatherProvider {
   private base = "https://api.open-meteo.com/v1/forecast";
 
-  private currentParams = [
+  // precipitation_probability and uv_index are only in hourly, not current
+  private currentVars = [
+    "temperature_2m", "apparent_temperature", "relative_humidity_2m",
+    "precipitation", "weather_code",
+    "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m",
+  ].join(",");
+
+  private hourlyVars = [
     "temperature_2m", "apparent_temperature", "relative_humidity_2m",
     "precipitation_probability", "precipitation", "weather_code",
     "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m", "uv_index",
   ].join(",");
 
-  private hourlyParams = [
-    "temperature_2m", "apparent_temperature", "relative_humidity_2m",
-    "precipitation_probability", "precipitation", "weather_code",
-    "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m", "uv_index",
-  ].join(",");
-
-  private url(loc: WeatherLocation, extra: string) {
+  private baseUrl(loc: WeatherLocation) {
     return (
       `${this.base}?latitude=${loc.lat}&longitude=${loc.lng}` +
-      `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch` +
-      `&timezone=auto${extra}`
+      `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`
     );
   }
 
   async getCurrentWeather(loc: WeatherLocation): Promise<WeatherInput> {
-    const res = await fetch(this.url(loc, `&current=${this.currentParams}&hourly=precipitation_probability&forecast_hours=1`));
-    if (!res.ok) throw new Error(`Open-Meteo error: ${res.status}`);
+    // Fetch current vars + first 2 hours of hourly to get precipProb & uvIndex
+    const url = `${this.baseUrl(loc)}&current=${this.currentVars}&hourly=precipitation_probability,uv_index&forecast_hours=2`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Open-Meteo error: ${res.status} ${await res.text()}`);
     const data = await res.json();
-    const c = data.current;
-    return this.mapCurrent(c);
+    const c = data.current as Record<string, number>;
+    const precipProb = (data.hourly?.precipitation_probability?.[0] ?? 0) / 100;
+    const uvIndex = data.hourly?.uv_index?.[0] ?? 0;
+    return {
+      tempF: c.temperature_2m ?? 60,
+      feelsLikeF: c.apparent_temperature ?? 58,
+      humidity: c.relative_humidity_2m ?? 50,
+      windSpeedMph: c.wind_speed_10m ?? 0,
+      windGustMph: c.wind_gusts_10m ?? 0,
+      windDirDeg: c.wind_direction_10m ?? 0,
+      precipProb,
+      precipInch: c.precipitation ?? 0,
+      uvIndex,
+      ...this.mapCode(c.weather_code ?? 0, c.temperature_2m ?? 60),
+    };
   }
 
   async getHourlyForecast(loc: WeatherLocation, hours = 24): Promise<HourlyForecast[]> {
-    const res = await fetch(this.url(loc, `&hourly=${this.hourlyParams}&forecast_hours=${hours}`));
+    const url = `${this.baseUrl(loc)}&hourly=${this.hourlyVars}&forecast_hours=${hours}`;
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`Open-Meteo error: ${res.status}`);
     const data = await res.json();
     const h = data.hourly;
-    return h.time.slice(0, hours).map((t: string, i: number) => ({
+    return (h.time as string[]).slice(0, hours).map((t, i) => ({
       timestamp: new Date(t),
       weather: {
         tempF: h.temperature_2m[i] ?? 60,
@@ -136,21 +152,6 @@ class OpenMeteoProvider implements WeatherProvider {
         ...this.mapCode(h.weather_code[i] ?? 0, h.temperature_2m[i] ?? 60),
       },
     }));
-  }
-
-  private mapCurrent(c: Record<string, number>): WeatherInput {
-    return {
-      tempF: c.temperature_2m ?? 60,
-      feelsLikeF: c.apparent_temperature ?? 58,
-      humidity: c.relative_humidity_2m ?? 50,
-      windSpeedMph: c.wind_speed_10m ?? 0,
-      windGustMph: c.wind_gusts_10m ?? 0,
-      windDirDeg: c.wind_direction_10m ?? 0,
-      precipProb: (c.precipitation_probability ?? 0) / 100,
-      precipInch: c.precipitation ?? 0,
-      uvIndex: c.uv_index ?? 0,
-      ...this.mapCode(c.weather_code ?? 0, c.temperature_2m ?? 60),
-    };
   }
 
   private mapCode(code: number, tempF: number): { condition: string; isStorm: boolean; isIce: boolean } {
