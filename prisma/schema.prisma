@@ -1,0 +1,171 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  passwordHash      String
+  name              String?
+  avatarUrl         String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  subscription      Subscription?
+  routes            Route[]
+  rideScoreHistory  RideScoreHistory[]
+  preferences       UserPreferences?
+  deviceIntegrations DeviceIntegration[]
+
+  @@map("users")
+}
+
+model UserPreferences {
+  id              String  @id @default(cuid())
+  userId          String  @unique
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  preferredUnit   String  @default("imperial")
+  sport           String  @default("cycling")
+  ebikeMode       Boolean @default(false)
+  preferCold      Boolean @default(false)
+  dislikeWind     Boolean @default(false)
+  temperatureMin  Float?
+  temperatureMax  Float?
+
+  @@map("user_preferences")
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tier                 String    @default("free")
+  stripeCustomerId     String?   @unique
+  stripeSubscriptionId String?   @unique
+  stripePriceId        String?
+  status               String    @default("active")
+  currentPeriodEnd     DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@map("subscriptions")
+}
+
+model Route {
+  id            String    @id @default(cuid())
+  userId        String?
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  name          String
+  sport         String    @default("cycling")
+  distance      Float
+  elevationGain Float
+  geometry      String                       // JSON string (GeoJSON LineString)
+  bearings      String    @default("[]")   // JSON string array of bearings
+  segments      String                     // JSON string of segmented route data
+  isPublic      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  rideScoreHistory RideScoreHistory[]
+
+  @@index([sport])
+  @@map("routes")
+}
+
+model WeatherSnapshot {
+  id            String    @id @default(cuid())
+  lat           Float
+  lng           Float
+  timestamp     DateTime
+
+  tempF         Float
+  feelsLikeF    Float
+  humidity      Int
+  windSpeedMph  Float
+  windGustMph   Float?
+  windDirDeg    Int
+  precipProb    Float
+  precipInch    Float     @default(0)
+  cloudCover    Int
+  visibility    Float
+  uvIndex       Float?
+  condition     String
+  conditionCode Int
+  isStorm       Boolean   @default(false)
+  isIce         Boolean   @default(false)
+
+  provider      String    @default("openweathermap")
+  createdAt     DateTime  @default(now())
+
+  @@index([lat, lng, timestamp])
+  @@map("weather_snapshots")
+}
+
+model RideScoreHistory {
+  id         String    @id @default(cuid())
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  routeId    String?
+  route      Route?    @relation(fields: [routeId], references: [id], onDelete: SetNull)
+
+  sport      String    @default("cycling")
+  score      Float
+  label      String
+  breakdown  String    // JSON string of per-factor scores
+  weatherId  String?
+  lat        Float
+  lng        Float
+  timestamp  DateTime
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, timestamp])
+  @@index([routeId, timestamp])
+  @@map("ride_score_history")
+}
+
+model DeviceIntegration {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider     String
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  scopes       String    @default("[]")   // JSON array of scopes (String[]) — SQLite compat
+  metadata     String?   // JSON string
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, provider])
+  @@map("device_integrations")
+}
+
+model PartnerListing {
+  id          String    @id @default(cuid())
+  name        String
+  type        String
+  lat         Float
+  lng         Float
+  address     String
+  phone       String?
+  website     String?
+  description String?
+  isVerified  Boolean   @default(false)
+  tier        String    @default("free")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([lat, lng])
+  @@index([type])
+  @@map("partner_listings")
+}
