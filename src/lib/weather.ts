@@ -84,6 +84,93 @@ class OpenWeatherProvider implements WeatherProvider {
   }
 }
 
+// Open-Meteo provider — free, no API key required
+class OpenMeteoProvider implements WeatherProvider {
+  private base = "https://api.open-meteo.com/v1/forecast";
+
+  private currentParams = [
+    "temperature_2m", "apparent_temperature", "relative_humidity_2m",
+    "precipitation_probability", "precipitation", "weather_code",
+    "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m", "uv_index",
+  ].join(",");
+
+  private hourlyParams = [
+    "temperature_2m", "apparent_temperature", "relative_humidity_2m",
+    "precipitation_probability", "precipitation", "weather_code",
+    "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m", "uv_index",
+  ].join(",");
+
+  private url(loc: WeatherLocation, extra: string) {
+    return (
+      `${this.base}?latitude=${loc.lat}&longitude=${loc.lng}` +
+      `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch` +
+      `&timezone=auto${extra}`
+    );
+  }
+
+  async getCurrentWeather(loc: WeatherLocation): Promise<WeatherInput> {
+    const res = await fetch(this.url(loc, `&current=${this.currentParams}&hourly=precipitation_probability&forecast_hours=1`));
+    if (!res.ok) throw new Error(`Open-Meteo error: ${res.status}`);
+    const data = await res.json();
+    const c = data.current;
+    return this.mapCurrent(c);
+  }
+
+  async getHourlyForecast(loc: WeatherLocation, hours = 24): Promise<HourlyForecast[]> {
+    const res = await fetch(this.url(loc, `&hourly=${this.hourlyParams}&forecast_hours=${hours}`));
+    if (!res.ok) throw new Error(`Open-Meteo error: ${res.status}`);
+    const data = await res.json();
+    const h = data.hourly;
+    return h.time.slice(0, hours).map((t: string, i: number) => ({
+      timestamp: new Date(t),
+      weather: {
+        tempF: h.temperature_2m[i] ?? 60,
+        feelsLikeF: h.apparent_temperature[i] ?? 58,
+        humidity: h.relative_humidity_2m[i] ?? 50,
+        windSpeedMph: h.wind_speed_10m[i] ?? 0,
+        windGustMph: h.wind_gusts_10m[i] ?? 0,
+        windDirDeg: h.wind_direction_10m[i] ?? 0,
+        precipProb: (h.precipitation_probability[i] ?? 0) / 100,
+        precipInch: h.precipitation[i] ?? 0,
+        uvIndex: h.uv_index[i] ?? 0,
+        ...this.mapCode(h.weather_code[i] ?? 0, h.temperature_2m[i] ?? 60),
+      },
+    }));
+  }
+
+  private mapCurrent(c: Record<string, number>): WeatherInput {
+    return {
+      tempF: c.temperature_2m ?? 60,
+      feelsLikeF: c.apparent_temperature ?? 58,
+      humidity: c.relative_humidity_2m ?? 50,
+      windSpeedMph: c.wind_speed_10m ?? 0,
+      windGustMph: c.wind_gusts_10m ?? 0,
+      windDirDeg: c.wind_direction_10m ?? 0,
+      precipProb: (c.precipitation_probability ?? 0) / 100,
+      precipInch: c.precipitation ?? 0,
+      uvIndex: c.uv_index ?? 0,
+      ...this.mapCode(c.weather_code ?? 0, c.temperature_2m ?? 60),
+    };
+  }
+
+  private mapCode(code: number, tempF: number): { condition: string; isStorm: boolean; isIce: boolean } {
+    const isStorm = code >= 95;
+    const isSnow = (code >= 71 && code <= 77) || code === 85 || code === 86;
+    const isIce = isSnow && tempF < 34;
+    const condition =
+      code === 0 ? "clear" :
+      code <= 3 ? "clouds" :
+      code <= 48 ? "fog" :
+      code <= 55 ? "drizzle" :
+      code <= 65 ? "rain" :
+      code <= 77 ? "snow" :
+      code <= 82 ? "rain" :
+      code <= 86 ? "snow" :
+      "thunderstorm";
+    return { condition, isStorm, isIce };
+  }
+}
+
 // Mock provider for development/testing without an API key
 export class MockWeatherProvider implements WeatherProvider {
   async getCurrentWeather(_loc: WeatherLocation): Promise<WeatherInput> {
@@ -117,13 +204,13 @@ export class MockWeatherProvider implements WeatherProvider {
   }
 }
 
-// Factory — returns real or mock provider based on env
+// Factory — Open-Meteo is default (free, no key). OpenWeather used if key is set.
 export function getWeatherProvider(): WeatherProvider {
   const apiKey = process.env.OPENWEATHER_API_KEY;
-  if (apiKey && apiKey !== "your_openweather_api_key_here") {
+  if (apiKey && apiKey.length > 10) {
     return new OpenWeatherProvider(apiKey);
   }
-  return new MockWeatherProvider();
+  return new OpenMeteoProvider();
 }
 
 // OWM response types
