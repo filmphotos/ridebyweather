@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import RideScoreGauge from "@/components/RideScore/RideScoreGauge";
 import RideScoreBreakdown from "@/components/RideScore/RideScoreBreakdown";
 import WeatherCard from "@/components/WeatherCard/WeatherCard";
@@ -79,16 +80,43 @@ export default function CyclingDashboard() {
     }
   }, []);
 
-  const detectLocation = useCallback(() => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  const detectLocation = useCallback(async () => {
+    const tryBrowserGeo = (): Promise<{ lat: number; lng: number } | null> =>
+      new Promise((resolve) => {
+        if (!navigator.geolocation) return resolve(null);
+        const timer = setTimeout(() => resolve(null), 4000);
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            clearTimeout(timer);
+            resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          },
+          () => {
+            clearTimeout(timer);
+            resolve(null);
+          },
+          { timeout: 4000, maximumAge: 600_000 }
+        );
+      });
+
+    const browserLoc = await tryBrowserGeo();
+    if (browserLoc) {
+      setLocation(browserLoc);
+      fetchRideScore(browserLoc.lat, browserLoc.lng);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/geo-ip");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data.lat === "number" && typeof data.lng === "number") {
+        const loc = { lat: data.lat, lng: data.lng, name: data.name };
         setLocation(loc);
         fetchRideScore(loc.lat, loc.lng);
-      },
-      () => {}
-    );
+      }
+    } catch {
+      // user can fall back to manual search
+    }
   }, [fetchRideScore]);
 
   useEffect(() => { detectLocation(); }, [detectLocation]);
@@ -193,6 +221,12 @@ export default function CyclingDashboard() {
             >
               {loading ? "…" : "Refresh"}
             </button>
+            <Link
+              href="/ride"
+              className="btn-primary text-sm px-4 py-2 flex-1 sm:flex-none whitespace-nowrap text-center bg-red-600 hover:bg-red-500"
+            >
+              ▶ Start Ride
+            </Link>
           </div>
         </div>
       </div>
