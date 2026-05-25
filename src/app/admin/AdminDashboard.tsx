@@ -4,6 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
+function stopPropagation(e: React.MouseEvent) {
+  e.stopPropagation();
+}
+
 interface AdminUser {
   id: string;
   email: string;
@@ -223,7 +227,11 @@ export default function AdminDashboard({ admin, stats, initialUsers }: Props) {
                     const isAdmin = u.role === "admin";
                     const busy = busyId === u.id;
                     return (
-                      <tr key={u.id} className="hover:bg-gray-800/40">
+                      <tr
+                        key={u.id}
+                        onClick={() => router.push(`/admin/users/${u.id}`)}
+                        className="hover:bg-gray-800/40 cursor-pointer"
+                      >
                         <td className="px-4 py-3 text-gray-200">{u.email}</td>
                         <td className="px-4 py-3 text-gray-400">{u.name ?? "—"}</td>
                         <td className="px-4 py-3">
@@ -241,8 +249,15 @@ export default function AdminDashboard({ admin, stats, initialUsers }: Props) {
                         <td className="px-4 py-3 text-gray-500 text-xs">
                           {new Date(u.createdAt).toLocaleDateString()}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="px-4 py-3 text-right" onClick={stopPropagation}>
                           <div className="inline-flex items-center gap-1.5">
+                            <Link
+                              href={`/admin/users/${u.id}`}
+                              className="rounded-md border border-gray-700 px-2 py-1 text-[11px] text-gray-300 hover:bg-gray-800 transition-colors"
+                              title="Open user detail"
+                            >
+                              View
+                            </Link>
                             <button
                               onClick={() => toggleRole(u)}
                               disabled={busy || (isSelf && isAdmin)}
