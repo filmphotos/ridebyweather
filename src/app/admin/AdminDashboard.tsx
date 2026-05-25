@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-interface RecentUser {
+interface AdminUser {
   id: string;
   email: string;
   name: string | null;
@@ -23,20 +23,107 @@ interface Stats {
 }
 
 interface Props {
-  admin: { email: string; name: string | null };
+  admin: { id?: string; email: string; name: string | null };
   stats: Stats;
-  recentUsers: RecentUser[];
+  initialUsers: AdminUser[];
 }
 
-export default function AdminDashboard({ admin, stats, recentUsers }: Props) {
+export default function AdminDashboard({ admin, stats, initialUsers }: Props) {
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
+  const [users, setUsers] = useState<AdminUser[]>(initialUsers);
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showToast(kind: "ok" | "err", text: string) {
+    setToast({ kind, text });
+    setTimeout(() => setToast(null), 3500);
+  }
+
+  // Debounced search
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const url = new URL("/api/admin/users", window.location.origin);
+        if (query.trim()) url.searchParams.set("q", query.trim());
+        url.searchParams.set("limit", "50");
+        const res = await fetch(url.toString());
+        const data = await res.json();
+        if (res.ok && Array.isArray(data.users)) {
+          setUsers(data.users);
+        }
+      } catch {
+        showToast("err", "Search failed.");
+      } finally {
+        setSearching(false);
+      }
+    }, 250);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query]);
 
   async function handleSignOut() {
     setSigningOut(true);
     await fetch("/api/auth/me", { method: "DELETE" });
     router.push("/admin/login");
     router.refresh();
+  }
+
+  async function toggleRole(u: AdminUser) {
+    const nextRole = u.role === "admin" ? "user" : "admin";
+    const verb = nextRole === "admin" ? "Promote" : "Demote";
+    if (!window.confirm(`${verb} ${u.email} to ${nextRole}?`)) return;
+
+    setBusyId(u.id);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: nextRole }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToast("err", data.error ?? "Could not update role.");
+        return;
+      }
+      setUsers((arr) => arr.map((x) => (x.id === u.id ? { ...x, role: nextRole } : x)));
+      showToast("ok", `${u.email} is now ${nextRole}.`);
+    } catch {
+      showToast("err", "Network error.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function deleteUser(u: AdminUser) {
+    if (
+      !window.confirm(
+        `Delete ${u.email}? This removes their account, routes, and subscription record. This cannot be undone.`
+      )
+    )
+      return;
+
+    setBusyId(u.id);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast("err", data.error ?? "Could not delete user.");
+        return;
+      }
+      setUsers((arr) => arr.filter((x) => x.id !== u.id));
+      showToast("ok", `${u.email} deleted.`);
+    } catch {
+      showToast("err", "Network error.");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   return (
@@ -82,11 +169,33 @@ export default function AdminDashboard({ admin, stats, recentUsers }: Props) {
           <StatCard label="Est. MRR" value={`$${stats.estimatedMrr}`} accent="amber" />
         </div>
 
-        {/* Recent users */}
+        {/* Users panel */}
         <section className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Recent users</h2>
-            <span className="text-xs text-gray-500">Latest 25</span>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+            <h2 className="text-lg font-semibold text-white">Users</h2>
+            <div className="relative w-full sm:w-72">
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by email or name…"
+                className="w-full rounded-lg bg-gray-800 border border-gray-700 pl-9 pr-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500 transition-colors"
+              />
+              <svg
+                className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z"
+                  clipRule="evenodd"
+                />
+              </svg>
+              {searching && (
+                <div className="absolute right-2.5 top-2.5 h-4 w-4 border-2 border-gray-600 border-t-sky-500 rounded-full animate-spin" />
+              )}
+            </div>
           </div>
 
           <div className="overflow-x-auto -mx-4 sm:mx-0">
@@ -98,42 +207,86 @@ export default function AdminDashboard({ admin, stats, recentUsers }: Props) {
                   <th className="px-4 py-3 font-medium">Tier</th>
                   <th className="px-4 py-3 font-medium">Role</th>
                   <th className="px-4 py-3 font-medium">Joined</th>
+                  <th className="px-4 py-3 font-medium text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800">
-                {recentUsers.length === 0 ? (
+                {users.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                      No users yet.
+                    <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                      {query ? "No users match that search." : "No users yet."}
                     </td>
                   </tr>
                 ) : (
-                  recentUsers.map((u) => (
-                    <tr key={u.id} className="hover:bg-gray-800/40">
-                      <td className="px-4 py-3 text-gray-200">{u.email}</td>
-                      <td className="px-4 py-3 text-gray-400">{u.name ?? "—"}</td>
-                      <td className="px-4 py-3">
-                        <TierBadge tier={u.subscription?.tier ?? "free"} />
-                      </td>
-                      <td className="px-4 py-3">
-                        {u.role === "admin" ? (
-                          <span className="rounded-full bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-[11px] text-amber-400">
-                            admin
-                          </span>
-                        ) : (
-                          <span className="text-gray-500 text-xs">user</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 text-xs">
-                        {new Date(u.createdAt).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))
+                  users.map((u) => {
+                    const isSelf = admin.id === u.id;
+                    const isAdmin = u.role === "admin";
+                    const busy = busyId === u.id;
+                    return (
+                      <tr key={u.id} className="hover:bg-gray-800/40">
+                        <td className="px-4 py-3 text-gray-200">{u.email}</td>
+                        <td className="px-4 py-3 text-gray-400">{u.name ?? "—"}</td>
+                        <td className="px-4 py-3">
+                          <TierBadge tier={u.subscription?.tier ?? "free"} />
+                        </td>
+                        <td className="px-4 py-3">
+                          {isAdmin ? (
+                            <span className="rounded-full bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-[11px] text-amber-400">
+                              admin
+                            </span>
+                          ) : (
+                            <span className="text-gray-500 text-xs">user</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-gray-500 text-xs">
+                          {new Date(u.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              onClick={() => toggleRole(u)}
+                              disabled={busy || (isSelf && isAdmin)}
+                              title={
+                                isSelf && isAdmin
+                                  ? "You can't demote yourself"
+                                  : isAdmin
+                                  ? "Demote to user"
+                                  : "Promote to admin"
+                              }
+                              className="rounded-md border border-gray-700 px-2 py-1 text-[11px] text-gray-300 hover:bg-gray-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            >
+                              {busy ? "…" : isAdmin ? "Demote" : "Promote"}
+                            </button>
+                            <button
+                              onClick={() => deleteUser(u)}
+                              disabled={busy || isSelf}
+                              title={isSelf ? "You can't delete yourself" : "Delete user"}
+                              className="rounded-md border border-red-500/30 px-2 py-1 text-[11px] text-red-400 hover:bg-red-500/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
           </div>
         </section>
+
+        {toast && (
+          <div
+            className={`fixed bottom-6 right-6 rounded-lg px-4 py-2.5 text-sm shadow-lg border ${
+              toast.kind === "ok"
+                ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+                : "bg-red-500/15 border-red-500/30 text-red-300"
+            }`}
+          >
+            {toast.text}
+          </div>
+        )}
       </main>
     </div>
   );

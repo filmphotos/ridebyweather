@@ -51,9 +51,9 @@ export default async function AdminPage() {
 
   return (
     <AdminDashboard
-      admin={admin}
+      admin={{ id: admin.id, email: admin.email, name: admin.name }}
       stats={stats}
-      recentUsers={recentUsers.map((u) => ({
+      initialUsers={recentUsers.map((u) => ({
         ...u,
         createdAt: u.createdAt.toISOString(),
       }))}
