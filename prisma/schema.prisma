@@ -24,8 +24,52 @@ model User {
   deviceIntegrations DeviceIntegration[]
   passwordResetTokens PasswordResetToken[]
   pushSubscriptions PushSubscription[]
+  groupRidesCreated GroupRide[] @relation("GroupRideCreator")
+  groupRideRsvps    GroupRideParticipant[]
 
   @@map("users")
+}
+
+model GroupRide {
+  id            String    @id @default(cuid())
+  creatorId     String
+  creator       User      @relation("GroupRideCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+
+  name          String
+  description   String?
+  sport         String    @default("cycling")
+  startTime     DateTime
+  lat           Float
+  lng           Float
+  locationName  String
+  pace          String?
+  distanceMi    Float?
+  maxRiders     Int?
+  visibility    String    @default("public")   // public | unlisted
+  inviteCode    String    @unique @default(cuid())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  participants  GroupRideParticipant[]
+
+  @@index([startTime])
+  @@index([sport, startTime])
+  @@map("group_rides")
+}
+
+model GroupRideParticipant {
+  id           String     @id @default(cuid())
+  groupRideId  String
+  groupRide    GroupRide  @relation(fields: [groupRideId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  status       String     @default("going")   // going | maybe
+  joinedAt     DateTime   @default(now())
+
+  @@unique([groupRideId, userId])
+  @@index([userId])
+  @@map("group_ride_participants")
 }
 
 model PushSubscription {

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 const navItems = [
   { label: "Cycling", href: "/cycling" },
   { label: "Running", href: "/running" },
+  { label: "Group Rides", href: "/group-rides" },
   { label: "Pricing", href: "/pricing" },
 ];
 
