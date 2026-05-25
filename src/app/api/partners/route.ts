@@ -4,7 +4,16 @@ import { fetchOsmBikeShops } from "@/lib/osmPartners";
 import { fetchMapboxBikeShops } from "@/lib/mapboxSearch";
 import { fetchFoursquareBikeShops } from "@/lib/foursquarePlaces";
 import { fetchYelpBikeShops } from "@/lib/yelpSearch";
+import { fetchOsmMedical } from "@/lib/osmMedical";
 import { verifyToken } from "@/lib/auth";
+
+// Always run fresh — don't serve a stale cached payload that might still
+// contain pre-fix hospital entries.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+const SHOP_LIMIT = 10;
+const MEDICAL_LIMIT = 5;
 
 function haversineMi(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8;
@@ -34,7 +43,7 @@ export async function GET(req: NextRequest) {
   const latDelta = radiusMi / 69;
   const lngDelta = radiusMi / (69 * Math.cos((lat * Math.PI) / 180));
 
-  const [dbCandidates, yelpC, fsqC, mapboxC, osmC] = await Promise.all([
+  const [dbCandidates, yelpC, fsqC, mapboxC, osmC, medicalC] = await Promise.all([
     db.partnerListing.findMany({
       where: {
         lat: { gte: lat - latDelta, lte: lat + latDelta },
@@ -46,6 +55,7 @@ export async function GET(req: NextRequest) {
     fetchFoursquareBikeShops(lat, lng, radiusMi),
     fetchMapboxBikeShops(lat, lng, radiusMi),
     fetchOsmBikeShops(lat, lng, radiusMi),
+    fetchOsmMedical(lat, lng, radiusMi),
   ]);
 
   const dbPartners = dbCandidates.map((p) => ({
@@ -76,6 +86,12 @@ export async function GET(req: NextRequest) {
       ? ["running_store", "gym", "bike_shop"]
       : ["bike_shop", "gym", "running_store"];
   const primaryType = sport === "running" ? "running_store" : "bike_shop";
+  const shopTypes = new Set(["bike_shop", "running_store", "gym"]);
+
+  // Reject anything whose name looks medical, no matter which source returned it.
+  // Belt-and-suspenders against bad category tagging in Foursquare/Yelp/OSM.
+  const MEDICAL_NAME_RE = /\b(hospital|clinic|urgent\s*care|medical\s*center|health\s*center|healthcare|pharmacy|surgery|surgical|dental|dentist|veterinary|vet\s+hospital|emergency\s+room|er\b)\b/i;
+  const looksMedical = (name: string) => MEDICAL_NAME_RE.test(name);
 
   type Result =
     | (typeof dbPartners)[number]
@@ -91,7 +107,7 @@ export async function GET(req: NextRequest) {
     ...mapboxPartners,
     ...osmPartners,
   ]
-    .filter((p) => p.distanceMi <= radiusMi)
+    .filter((p) => p.distanceMi <= radiusMi && shopTypes.has(p.type) && !looksMedical(p.name))
     .sort((a: Result, b: Result) => {
       const isPrimary = (p: Result) => (p.type === primaryType ? 1 : 0);
       if (isPrimary(a) !== isPrimary(b)) return isPrimary(b) - isPrimary(a);
@@ -106,7 +122,19 @@ export async function GET(req: NextRequest) {
         tierScore(b) + typeScore(b) - (tierScore(a) + typeScore(a)) ||
         a.distanceMi - b.distanceMi
       );
-    });
+    })
+    .slice(0, SHOP_LIMIT);
 
-  return NextResponse.json({ partners: results });
+  const medical = medicalC
+    .map((m) => ({ ...m, distanceMi: haversineMi(lat, lng, m.lat, m.lng) }))
+    .filter((m) => m.distanceMi <= radiusMi)
+    .sort((a, b) => {
+      // Urgent care first, then hospital, then clinic; ties broken by distance
+      const rank = (t: string) =>
+        t === "urgent_care" ? 0 : t === "hospital" ? 1 : 2;
+      return rank(a.type) - rank(b.type) || a.distanceMi - b.distanceMi;
+    })
+    .slice(0, MEDICAL_LIMIT);
+
+  return NextResponse.json({ partners: results, medical });
 }
