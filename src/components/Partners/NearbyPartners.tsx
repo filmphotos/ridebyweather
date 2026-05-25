@@ -1,0 +1,160 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+interface Partner {
+  id: string;
+  name: string;
+  type: string;
+  address: string;
+  phone: string | null;
+  website: string | null;
+  description: string | null;
+  isVerified: boolean;
+  tier: string;
+  distanceMi: number;
+}
+
+interface Props {
+  lat: number;
+  lng: number;
+  sport?: "cycling" | "running";
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  bike_shop: "Bike Shop",
+  running_store: "Running Store",
+  gym: "Gym",
+};
+
+const TYPE_ICONS: Record<string, React.ReactNode> = {
+  bike_shop: (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <circle cx="5.5" cy="17.5" r="3.5" /><circle cx="18.5" cy="17.5" r="3.5" />
+      <path strokeLinecap="round" d="M5.5 17.5L9 9l4 3 3-5.5h2M9 9h5" />
+    </svg>
+  ),
+  running_store: (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13 4a1 1 0 100-2 1 1 0 000 2zm-3 3l2 5 4-2 2 4M7 20l3-6 3 2" />
+    </svg>
+  ),
+  gym: (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" d="M4 12h3m10 0h3M7 12V7m0 10v-5M17 12V7m0 10v-5M9 7h6M9 17h6" />
+    </svg>
+  ),
+};
+
+export default function NearbyPartners({ lat, lng, sport = "cycling" }: Props) {
+  const [partners, setPartners] = useState<Partner[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/partners?lat=${lat}&lng=${lng}&sport=${sport}&radius=25`)
+      .then((r) => r.json())
+      .then((d) => setPartners(d.partners ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [lat, lng, sport]);
+
+  if (loading) {
+    return (
+      <div className="card">
+        <h3 className="font-semibold text-white mb-3">Nearby Shops</h3>
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 rounded-lg bg-gray-800 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (partners.length === 0) {
+    return (
+      <div className="card">
+        <h3 className="font-semibold text-white mb-1">Nearby Shops</h3>
+        <p className="text-sm text-gray-500 mt-2">No partner shops found within 25 miles.</p>
+        <a
+          href="mailto:partners@ridebyweather.com"
+          className="mt-3 inline-block text-xs text-sky-400 hover:underline"
+        >
+          List your shop →
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-white">Nearby Shops</h3>
+        <span className="text-xs text-gray-500">within 25 mi</span>
+      </div>
+
+      <div className="space-y-2">
+        {partners.map((p) => (
+          <div
+            key={p.id}
+            className="flex items-start gap-3 rounded-lg border border-gray-800 bg-gray-800/40 p-3 hover:border-gray-700 transition-colors"
+          >
+            {/* Icon */}
+            <div className={`flex-shrink-0 mt-0.5 rounded-lg p-2 ${
+              p.tier === "enterprise" ? "bg-sky-500/20 text-sky-400"
+              : p.tier === "pro" ? "bg-indigo-500/20 text-indigo-400"
+              : "bg-gray-700 text-gray-400"
+            }`}>
+              {TYPE_ICONS[p.type] ?? TYPE_ICONS.bike_shop}
+            </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-medium text-gray-100 truncate">{p.name}</span>
+                {p.isVerified && (
+                  <svg className="h-3.5 w-3.5 text-sky-400 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                <span className="text-xs text-gray-500">{TYPE_LABELS[p.type] ?? p.type}</span>
+                <span className="text-gray-700 text-xs">·</span>
+                <span className="text-xs text-gray-500">{p.distanceMi.toFixed(1)} mi away</span>
+              </div>
+              {p.description && (
+                <p className="text-xs text-gray-500 mt-1 line-clamp-1">{p.description}</p>
+              )}
+              <div className="flex items-center gap-3 mt-1.5">
+                {p.website && (
+                  <a
+                    href={p.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-sky-400 hover:text-sky-300 hover:underline"
+                  >
+                    Website
+                  </a>
+                )}
+                {p.phone && (
+                  <a href={`tel:${p.phone}`} className="text-xs text-gray-500 hover:text-gray-300">
+                    {p.phone}
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <a
+        href="mailto:partners@ridebyweather.com"
+        className="mt-3 block text-center text-xs text-gray-600 hover:text-sky-400 transition-colors"
+      >
+        List your shop here →
+      </a>
+    </div>
+  );
+}

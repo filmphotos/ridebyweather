@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import Map, { Source, Layer, Marker, NavigationControl } from "react-map-gl";
 import type { MapMouseEvent } from "react-map-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
+import StravaImport from "@/components/Strava/StravaImport";
 
 interface Props {
   lat: number;
@@ -15,10 +16,20 @@ interface Props {
 type WindType = "tailwind" | "headwind" | "crosswind";
 
 interface Segment {
-  from: [number, number]; // [lng, lat]
+  from: [number, number];
   to: [number, number];
   windType: WindType;
   color: string;
+}
+
+interface SavedRoute {
+  id: string;
+  name: string;
+  sport: string;
+  distance: number;
+  geometry: string;
+  segments: string;
+  createdAt: string;
 }
 
 const WIND_COLORS: Record<WindType, string> = {
@@ -32,27 +43,78 @@ function bearingBetween(lat1: number, lng1: number, lat2: number, lng2: number):
   const lat1R = (lat1 * Math.PI) / 180;
   const lat2R = (lat2 * Math.PI) / 180;
   const y = Math.sin(dLng) * Math.cos(lat2R);
-  const x =
-    Math.cos(lat1R) * Math.sin(lat2R) -
-    Math.sin(lat1R) * Math.cos(lat2R) * Math.cos(dLng);
+  const x = Math.cos(lat1R) * Math.sin(lat2R) - Math.sin(lat1R) * Math.cos(lat2R) * Math.cos(dLng);
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
 function classifySegment(bearing: number, windDirDeg: number): WindType {
-  // windDirDeg = direction wind comes FROM; wind vector goes TO (windDirDeg + 180)
   const windVectorDir = (windDirDeg + 180) % 360;
-  // delta: 0 = riding with wind (tailwind), 180 = riding into wind (headwind)
   const delta = Math.abs((((bearing - windVectorDir + 540) % 360) - 180));
   if (delta <= 45) return "tailwind";
   if (delta >= 135) return "headwind";
   return "crosswind";
 }
 
+// Haversine distance in miles
+function distanceMi(wps: [number, number][]): number {
+  let total = 0;
+  for (let i = 0; i < wps.length - 1; i++) {
+    const [lng1, lat1] = wps[i];
+    const [lng2, lat2] = wps[i + 1];
+    const R = 3958.8;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLng = ((lng2 - lng1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+    total += R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+  return total;
+}
+
 export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) {
   const [waypoints, setWaypoints] = useState<[number, number][]>([]);
   const [reversed, setReversed] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  // Save dialog
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [routeName, setRouteName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  // Saved routes panel
+  const [showSaved, setShowSaved] = useState(false);
+  const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
+  const [loadingRoutes, setLoadingRoutes] = useState(false);
+  const [showStravaImport, setShowStravaImport] = useState(false);
+  const [stravaConnected, setStravaConnected] = useState(false);
 
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => setIsLoggedIn(!!d.user))
+      .catch(() => {});
+    fetch("/api/strava/status")
+      .then((r) => r.json())
+      .then((d) => setStravaConnected(!!d.connected))
+      .catch(() => {});
+  }, []);
+
+  const fetchSavedRoutes = useCallback(async () => {
+    setLoadingRoutes(true);
+    try {
+      const res = await fetch("/api/routes");
+      if (res.ok) {
+        const data = await res.json();
+        setSavedRoutes(data.routes ?? []);
+      }
+    } finally {
+      setLoadingRoutes(false);
+    }
+  }, []);
 
   const handleMapClick = useCallback((e: MapMouseEvent) => {
     setWaypoints((prev) => [...prev, [e.lngLat.lng, e.lngLat.lat]]);
@@ -78,10 +140,7 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
     type: "FeatureCollection" as const,
     features: segments.map((seg) => ({
       type: "Feature" as const,
-      geometry: {
-        type: "LineString" as const,
-        coordinates: [seg.from, seg.to],
-      },
+      geometry: { type: "LineString" as const, coordinates: [seg.from, seg.to] },
       properties: { color: seg.color },
     })),
   }), [segments]);
@@ -105,8 +164,52 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
     return null;
   }, [stats]);
 
-  // Wind arrow rotation: arrow points where wind is blowing TO
   const windArrowDeg = (windDirDeg + 180) % 360;
+  const routeDistanceMi = useMemo(() => distanceMi(activeWaypoints), [activeWaypoints]);
+
+  async function handleSaveRoute() {
+    if (!routeName.trim()) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      const res = await fetch("/api/routes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: routeName.trim(),
+          sport: "cycling",
+          waypoints: activeWaypoints,
+          segments: segments.map(({ windType, color }) => ({ windType, color })),
+          distanceMi: routeDistanceMi,
+        }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setShowSaveDialog(false);
+      setRouteName("");
+      if (showSaved) fetchSavedRoutes();
+    } catch {
+      setSaveError("Could not save route. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleLoadRoute(route: SavedRoute) {
+    try {
+      const geo = JSON.parse(route.geometry);
+      const coords: [number, number][] = geo.coordinates;
+      setWaypoints(coords);
+      setReversed(false);
+      setShowSaved(false);
+    } catch {
+      // malformed geometry
+    }
+  }
+
+  async function handleDeleteRoute(id: string) {
+    await fetch(`/api/routes/${id}`, { method: "DELETE" });
+    setSavedRoutes((prev) => prev.filter((r) => r.id !== id));
+  }
 
   if (!token) {
     return (
@@ -135,16 +238,43 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
   return (
     <div className="card">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
           <h3 className="font-semibold text-white">Route Wind Planner</h3>
           <p className="text-xs text-gray-500 mt-0.5">
             {waypoints.length === 0
-              ? "Click the map to add waypoints"
-              : `${waypoints.length} waypoint${waypoints.length !== 1 ? "s" : ""} · ${segments.length} segment${segments.length !== 1 ? "s" : ""}`}
+              ? "Tap the map to add waypoints"
+              : `${waypoints.length} waypoints · ${segments.length} segments · ${routeDistanceMi.toFixed(1)} mi`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {isLoggedIn && waypoints.length >= 2 && (
+            <button
+              onClick={() => { setShowSaveDialog(true); setSaveError(""); }}
+              className="btn-primary text-xs px-3 py-1.5 flex items-center gap-1"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+              </svg>
+              Save
+            </button>
+          )}
+          {isLoggedIn && (
+            <button
+              onClick={() => {
+                setShowSaved((s) => {
+                  if (!s) fetchSavedRoutes();
+                  return !s;
+                });
+              }}
+              className="btn-secondary text-xs px-3 py-1.5 flex items-center gap-1"
+            >
+              <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5A.75.75 0 012 10z" clipRule="evenodd" />
+              </svg>
+              My Routes
+            </button>
+          )}
           {waypoints.length >= 2 && (
             <button
               onClick={() => setReversed((r) => !r)}
@@ -168,19 +298,110 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
         </div>
       </div>
 
+      {/* Saved routes panel */}
+      {showSaved && (
+        <div className="mb-4 rounded-xl border border-gray-700 bg-gray-900/60 overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-700 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Saved Routes</span>
+            <div className="flex items-center gap-2">
+              {stravaConnected && (
+                <button
+                  onClick={() => setShowStravaImport(true)}
+                  className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 font-medium transition-colors"
+                  title="Import from Strava"
+                >
+                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-orange-400" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066l-2.084 4.116z" />
+                    <path d="M11.094 13.828l2.089 4.116 2.08-4.116H20.6L15.387 3 10.18 13.828h.914z" />
+                  </svg>
+                  Import
+                </button>
+              )}
+              <button onClick={() => setShowSaved(false)} className="text-gray-600 hover:text-gray-400">
+                <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          {loadingRoutes ? (
+            <div className="flex justify-center py-6">
+              <div className="h-5 w-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : savedRoutes.length === 0 ? (
+            <p className="text-xs text-gray-500 text-center py-6">No saved routes yet.</p>
+          ) : (
+            <div className="divide-y divide-gray-800 max-h-48 overflow-y-auto">
+              {savedRoutes.map((route) => (
+                <div key={route.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-800/50 transition-colors">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-200 truncate">{route.name}</p>
+                    <p className="text-xs text-gray-500">{route.distance.toFixed(1)} mi · {new Date(route.createdAt).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                    <button
+                      onClick={() => handleLoadRoute(route)}
+                      className="text-xs text-sky-400 hover:text-sky-300 font-medium"
+                    >
+                      Load
+                    </button>
+                    <button
+                      onClick={() => handleDeleteRoute(route.id)}
+                      className="text-gray-600 hover:text-red-400 transition-colors"
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Save dialog */}
+      {showSaveDialog && (
+        <div className="mb-4 rounded-xl border border-gray-700 bg-gray-900 p-4">
+          <p className="text-sm font-medium text-gray-200 mb-2">Name this route</p>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              autoFocus
+              type="text"
+              placeholder="e.g. Morning loop"
+              value={routeName}
+              onChange={(e) => setRouteName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSaveRoute()}
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveRoute}
+                disabled={saving || !routeName.trim()}
+                className="btn-primary text-sm px-4 py-2 disabled:opacity-50 flex-1 sm:flex-none"
+              >
+                {saving ? "Saving…" : "Save"}
+              </button>
+              <button
+                onClick={() => { setShowSaveDialog(false); setRouteName(""); setSaveError(""); }}
+                className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-400 hover:bg-gray-800 flex-1 sm:flex-none"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+          {saveError && <p className="text-xs text-red-400 mt-2">{saveError}</p>}
+        </div>
+      )}
+
       {/* Stats bar */}
       {stats && (
         <div className="mb-4 space-y-2">
           <div className="flex gap-1 h-2 rounded-full overflow-hidden">
-            {stats.tailwind > 0 && (
-              <div className="bg-green-500 transition-all" style={{ width: `${stats.tailwind}%` }} />
-            )}
-            {stats.crosswind > 0 && (
-              <div className="bg-yellow-500 transition-all" style={{ width: `${stats.crosswind}%` }} />
-            )}
-            {stats.headwind > 0 && (
-              <div className="bg-red-500 transition-all" style={{ width: `${stats.headwind}%` }} />
-            )}
+            {stats.tailwind > 0 && <div className="bg-green-500 transition-all" style={{ width: `${stats.tailwind}%` }} />}
+            {stats.crosswind > 0 && <div className="bg-yellow-500 transition-all" style={{ width: `${stats.crosswind}%` }} />}
+            {stats.headwind > 0 && <div className="bg-red-500 transition-all" style={{ width: `${stats.headwind}%` }} />}
           </div>
           <div className="flex gap-4 text-xs">
             <span className="flex items-center gap-1.5 text-green-400">
@@ -204,8 +425,8 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
         </div>
       )}
 
-      {/* Map container */}
-      <div className="relative rounded-xl overflow-hidden" style={{ height: 440 }}>
+      {/* Map */}
+      <div className="relative rounded-xl overflow-hidden h-[320px] sm:h-[440px]">
         <Map
           mapboxAccessToken={token}
           initialViewState={{ longitude: lng, latitude: lat, zoom: 11 }}
@@ -216,55 +437,35 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
         >
           <NavigationControl position="bottom-right" />
 
-          {/* Colored route segments */}
           {segments.length > 0 && (
             <Source id="route" type="geojson" data={routeGeoJSON}>
               <Layer
                 id="route-shadow"
                 type="line"
                 layout={{ "line-cap": "round", "line-join": "round" }}
-                paint={{
-                  "line-color": ["get", "color"],
-                  "line-width": 10,
-                  "line-opacity": 0.2,
-                  "line-blur": 4,
-                }}
+                paint={{ "line-color": ["get", "color"], "line-width": 10, "line-opacity": 0.2, "line-blur": 4 }}
               />
               <Layer
                 id="route-line"
                 type="line"
                 layout={{ "line-cap": "round", "line-join": "round" }}
-                paint={{
-                  "line-color": ["get", "color"],
-                  "line-width": 5,
-                  "line-opacity": 0.95,
-                }}
+                paint={{ "line-color": ["get", "color"], "line-width": 5, "line-opacity": 0.95 }}
               />
             </Source>
           )}
 
-          {/* Waypoint markers */}
           {activeWaypoints.map((wp, i) => (
-            <Marker
-              key={`${i}-${wp[0]}-${wp[1]}`}
-              longitude={wp[0]}
-              latitude={wp[1]}
-              anchor="center"
-            >
-              <div
-                className={`rounded-full border-2 border-white shadow-lg ${
-                  i === 0
-                    ? "h-4 w-4 bg-sky-500"
-                    : i === activeWaypoints.length - 1
-                    ? "h-4 w-4 bg-purple-500"
-                    : "h-2.5 w-2.5 bg-gray-400"
-                }`}
-              />
+            <Marker key={`${i}-${wp[0]}-${wp[1]}`} longitude={wp[0]} latitude={wp[1]} anchor="center">
+              <div className={`rounded-full border-2 border-white shadow-lg ${
+                i === 0 ? "h-4 w-4 bg-sky-500"
+                : i === activeWaypoints.length - 1 ? "h-4 w-4 bg-purple-500"
+                : "h-2.5 w-2.5 bg-gray-400"
+              }`} />
             </Marker>
           ))}
         </Map>
 
-        {/* Wind indicator overlay */}
+        {/* Wind indicator */}
         <div className="absolute top-3 left-3 flex items-center gap-2 rounded-xl bg-gray-900/85 backdrop-blur-sm px-3 py-2 border border-gray-700/60 text-xs text-gray-300">
           <svg
             className="h-5 w-5 text-sky-400 flex-shrink-0"
@@ -283,14 +484,11 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
           </div>
         </div>
 
-        {/* Empty state hint */}
         {waypoints.length === 0 && (
           <div className="pointer-events-none absolute inset-x-0 bottom-10 flex justify-center">
             <div className="rounded-xl bg-gray-900/80 backdrop-blur-sm px-4 py-2.5 border border-gray-700/50 text-center">
               <p className="text-sm font-medium text-gray-200">Click anywhere to start your route</p>
-              <p className="text-[11px] text-gray-500 mt-0.5">
-                Segments will color by wind impact
-              </p>
+              <p className="text-[11px] text-gray-500 mt-0.5">Segments will color by wind impact</p>
             </div>
           </div>
         )}
@@ -298,27 +496,29 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
 
       {/* Legend */}
       <div className="mt-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-1.5 text-xs text-gray-500">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-1 w-5 rounded-full bg-green-500" />
-          Tailwind
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-1 w-5 rounded-full bg-yellow-500" />
-          Crosswind
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-1 w-5 rounded-full bg-red-500" />
-          Headwind
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-full bg-sky-500 border border-white" />
-          Start
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-full bg-purple-500 border border-white" />
-          End
-        </span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-1 w-5 rounded-full bg-green-500" />Tailwind</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-1 w-5 rounded-full bg-yellow-500" />Crosswind</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-1 w-5 rounded-full bg-red-500" />Headwind</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-full bg-sky-500 border border-white" />Start</span>
+        <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-full bg-purple-500 border border-white" />End</span>
       </div>
+
+      {!isLoggedIn && waypoints.length >= 2 && (
+        <p className="mt-3 text-center text-xs text-gray-500">
+          <a href="/signup" className="text-sky-400 hover:underline">Sign up</a> to save routes
+        </p>
+      )}
+
+      {showStravaImport && (
+        <StravaImport
+          onImported={() => {
+            setShowStravaImport(false);
+            fetchSavedRoutes();
+            if (!showSaved) setShowSaved(true);
+          }}
+          onClose={() => setShowStravaImport(false)}
+        />
+      )}
     </div>
   );
 }

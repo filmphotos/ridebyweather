@@ -18,6 +18,7 @@ async function initSqlite() {
         "passwordHash" TEXT NOT NULL,
         "name" TEXT,
         "avatarUrl" TEXT,
+        "role" TEXT NOT NULL DEFAULT 'user',
         "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
       )`,
@@ -127,6 +128,22 @@ async function initSqlite() {
 
     for (const sql of tables) {
       await db.$executeRawUnsafe(sql);
+    }
+
+    // Idempotent migrations for columns added after initial schema.
+    // SQLite throws if the column already exists; we swallow that specific case.
+    const addColumnMigrations = [
+      `ALTER TABLE "users" ADD COLUMN "role" TEXT NOT NULL DEFAULT 'user'`,
+    ];
+    for (const sql of addColumnMigrations) {
+      try {
+        await db.$executeRawUnsafe(sql);
+      } catch (e: unknown) {
+        const msg = (e as { message?: string })?.message ?? "";
+        if (!/duplicate column name/i.test(msg)) {
+          console.error("[instrumentation] migration failed:", msg);
+        }
+      }
     }
 
     // Seed partner listings if empty

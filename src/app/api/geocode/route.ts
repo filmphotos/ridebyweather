@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { verifyToken } from "@/lib/auth";
 
 const QuerySchema = z.object({ q: z.string().min(2).max(100) });
 
@@ -13,6 +14,10 @@ export interface GeoResult {
 
 // Uses Open-Meteo geocoding API — free, no key required
 export async function GET(req: NextRequest) {
+  const token = req.cookies.get("rbw_token")?.value;
+  const payload = token ? await verifyToken(token) : null;
+  if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const params = Object.fromEntries(req.nextUrl.searchParams);
   const parsed = QuerySchema.safeParse(params);
   if (!parsed.success) return NextResponse.json({ results: [] });

@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWeatherProvider } from "@/lib/weather";
 import { computeRunScore } from "@/lib/run-score";
+import { verifyToken } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
+  const token = req.cookies.get("rbw_token")?.value;
+  const payload = token ? await verifyToken(token) : null;
+  if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const { searchParams } = new URL(req.url);
   const lat = parseFloat(searchParams.get("lat") ?? "");
   const lng = parseFloat(searchParams.get("lng") ?? "");

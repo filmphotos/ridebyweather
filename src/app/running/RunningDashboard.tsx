@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import ForecastTimeline from "@/components/Forecast/ForecastTimeline";
 import WeatherCard from "@/components/WeatherCard/WeatherCard";
 import WeatherAvatar from "@/components/WeatherAvatar/WeatherAvatar";
+import NearbyPartners from "@/components/Partners/NearbyPartners";
 import type { GeoResult } from "@/app/api/geocode/route";
 
 interface RunScoreData {
@@ -162,23 +163,14 @@ export default function RunningDashboard() {
   }, []);
 
   const detectLocation = useCallback(() => {
-    if (!navigator.geolocation) {
-      const demo = { lat: 40.015, lng: -105.2705, name: "Boulder, CO (demo)" };
-      setLocation(demo);
-      fetchRunScore(demo.lat, demo.lng);
-      return;
-    }
+    if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setLocation(loc);
         fetchRunScore(loc.lat, loc.lng);
       },
-      () => {
-        const demo = { lat: 40.015, lng: -105.2705, name: "Boulder, CO (demo)" };
-        setLocation(demo);
-        fetchRunScore(demo.lat, demo.lng);
-      }
+      () => {}
     );
   }, [fetchRunScore]);
 
@@ -223,7 +215,7 @@ export default function RunningDashboard() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Running Dashboard</h1>
           {location && (
@@ -233,8 +225,8 @@ export default function RunningDashboard() {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <div ref={searchRef} className="relative">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto">
+          <div ref={searchRef} className="relative w-full sm:w-60">
             <div className="relative">
               <input
                 type="text"
@@ -242,7 +234,7 @@ export default function RunningDashboard() {
                 onChange={(e) => handleQueryChange(e.target.value)}
                 onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                 placeholder="Enter city or address…"
-                className="rounded-lg bg-gray-800 border border-gray-700 pl-4 pr-8 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500 w-60"
+                className="w-full rounded-lg bg-gray-800 border border-gray-700 pl-4 pr-8 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
               />
               {searchLoading && (
                 <div className="absolute right-2 top-2.5 h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-t-sky-400" />
@@ -269,16 +261,18 @@ export default function RunningDashboard() {
             )}
           </div>
 
-          <button onClick={detectLocation} className="btn-secondary text-sm px-4 py-2 whitespace-nowrap">
-            📍 My Location
-          </button>
-          <button
-            onClick={() => location && fetchRunScore(location.lat, location.lng)}
-            disabled={!location || loading}
-            className="btn-primary text-sm px-4 py-2"
-          >
-            {loading ? "…" : "Refresh"}
-          </button>
+          <div className="flex gap-2">
+            <button onClick={detectLocation} className="btn-secondary text-sm px-4 py-2 whitespace-nowrap flex-1 sm:flex-none">
+              📍 My Location
+            </button>
+            <button
+              onClick={() => location && fetchRunScore(location.lat, location.lng)}
+              disabled={!location || loading}
+              className="btn-primary text-sm px-4 py-2 flex-1 sm:flex-none"
+            >
+              {loading ? "…" : "Refresh"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -358,8 +352,15 @@ export default function RunningDashboard() {
             </div>
           )}
 
+          {/* Nearby running stores */}
+          {location && (
+            <div className="lg:col-span-1">
+              <NearbyPartners lat={location.lat} lng={location.lng} sport="running" />
+            </div>
+          )}
+
           {/* Run Score formula explainer */}
-          <div className="lg:col-span-3 card">
+          <div className={location ? "lg:col-span-2 card" : "lg:col-span-3 card"}>
             <h3 className="font-semibold text-white mb-4">How Run Score is calculated</h3>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               {BREAKDOWN_FACTORS.map(({ key, label, icon, weight }) => {

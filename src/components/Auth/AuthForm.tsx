@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface AuthFormProps {
   mode: "login" | "signup";
@@ -11,6 +11,9 @@ interface AuthFormProps {
 
 export default function AuthForm({ mode, plan }: AuthFormProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextParam = searchParams.get("next");
+  const safeNext = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,11 +47,12 @@ export default function AuthForm({ mode, plan }: AuthFormProps) {
         return;
       }
 
-      // Redirect to cycling dashboard (or checkout if upgrading)
       if (plan === "pro") {
         router.push("/cycling?welcome=pro");
       } else if (plan === "enterprise") {
         router.push("/cycling?welcome=enterprise");
+      } else if (safeNext) {
+        router.push(safeNext);
       } else {
         router.push("/cycling");
       }

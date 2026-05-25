@@ -7,6 +7,7 @@ import RideScoreBreakdown from "@/components/RideScore/RideScoreBreakdown";
 import WeatherCard from "@/components/WeatherCard/WeatherCard";
 import WeatherAvatar from "@/components/WeatherAvatar/WeatherAvatar";
 import ForecastTimeline from "@/components/Forecast/ForecastTimeline";
+import NearbyPartners from "@/components/Partners/NearbyPartners";
 import type { GeoResult } from "@/app/api/geocode/route";
 
 const RouteMap = dynamic(() => import("@/components/RouteMap/RouteMap"), { ssr: false });
@@ -44,6 +45,17 @@ export default function CyclingDashboard() {
   const [data, setData] = useState<RideScoreData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [gender, setGender] = useState<"male" | "female">("male");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("rbw_gender");
+    if (saved === "male" || saved === "female") setGender(saved);
+  }, []);
+
+  const updateGender = (g: "male" | "female") => {
+    setGender(g);
+    localStorage.setItem("rbw_gender", g);
+  };
 
   // Geocode search state
   const [query, setQuery] = useState("");
@@ -68,23 +80,14 @@ export default function CyclingDashboard() {
   }, []);
 
   const detectLocation = useCallback(() => {
-    if (!navigator.geolocation) {
-      const demo = { lat: 40.015, lng: -105.2705, name: "Boulder, CO (demo)" };
-      setLocation(demo);
-      fetchRideScore(demo.lat, demo.lng);
-      return;
-    }
+    if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setLocation(loc);
         fetchRideScore(loc.lat, loc.lng);
       },
-      () => {
-        const demo = { lat: 40.015, lng: -105.2705, name: "Boulder, CO (demo)" };
-        setLocation(demo);
-        fetchRideScore(demo.lat, demo.lng);
-      }
+      () => {}
     );
   }, [fetchRideScore]);
 
@@ -131,7 +134,7 @@ export default function CyclingDashboard() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Cycling Dashboard</h1>
           {location && (
@@ -141,9 +144,9 @@ export default function CyclingDashboard() {
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto">
           {/* Location search with autocomplete */}
-          <div ref={searchRef} className="relative">
+          <div ref={searchRef} className="relative w-full sm:w-60">
             <div className="relative">
               <input
                 type="text"
@@ -151,7 +154,7 @@ export default function CyclingDashboard() {
                 onChange={(e) => handleQueryChange(e.target.value)}
                 onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
                 placeholder="Enter city or address…"
-                className="rounded-lg bg-gray-800 border border-gray-700 pl-4 pr-8 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500 w-60"
+                className="w-full rounded-lg bg-gray-800 border border-gray-700 pl-4 pr-8 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
               />
               {searchLoading && (
                 <div className="absolute right-2 top-2.5 h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-t-sky-400" />
@@ -179,16 +182,18 @@ export default function CyclingDashboard() {
             )}
           </div>
 
-          <button onClick={detectLocation} className="btn-secondary text-sm px-4 py-2 whitespace-nowrap">
-            📍 My Location
-          </button>
-          <button
-            onClick={() => location && fetchRideScore(location.lat, location.lng)}
-            disabled={!location || loading}
-            className="btn-primary text-sm px-4 py-2"
-          >
-            {loading ? "…" : "Refresh"}
-          </button>
+          <div className="flex gap-2">
+            <button onClick={detectLocation} className="btn-secondary text-sm px-4 py-2 whitespace-nowrap flex-1 sm:flex-none">
+              📍 My Location
+            </button>
+            <button
+              onClick={() => location && fetchRideScore(location.lat, location.lng)}
+              disabled={!location || loading}
+              className="btn-primary text-sm px-4 py-2 flex-1 sm:flex-none"
+            >
+              {loading ? "…" : "Refresh"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -234,10 +239,34 @@ export default function CyclingDashboard() {
               precipProb={data.weather.precipProb}
               condition={data.weather.condition}
             />
+            <div className="flex items-center justify-end gap-2">
+              <span className="text-xs text-gray-500">Avatar:</span>
+              <div className="inline-flex rounded-lg border border-gray-800 bg-gray-900 p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => updateGender("male")}
+                  className={`px-3 py-1 rounded-md transition-colors ${
+                    gender === "male" ? "bg-sky-500 text-white" : "text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  Male
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateGender("female")}
+                  className={`px-3 py-1 rounded-md transition-colors ${
+                    gender === "female" ? "bg-sky-500 text-white" : "text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  Female
+                </button>
+              </div>
+            </div>
             <WeatherAvatar
               tempF={data.weather.tempF}
               precipProb={data.weather.precipProb}
               windSpeedMph={data.weather.windSpeedMph}
+              gender={gender}
             />
           </div>
 
@@ -248,15 +277,20 @@ export default function CyclingDashboard() {
             </div>
           )}
 
-          {/* Route Wind Planner */}
+          {/* Route Wind Planner + Nearby Shops */}
           {location && (
-            <div className="lg:col-span-3">
+            <div className="lg:col-span-2">
               <RouteMap
                 lat={location.lat}
                 lng={location.lng}
                 windDirDeg={data.weather.windDirDeg}
                 windSpeedMph={data.weather.windSpeedMph}
               />
+            </div>
+          )}
+          {location && (
+            <div className="lg:col-span-1">
+              <NearbyPartners lat={location.lat} lng={location.lng} sport="cycling" />
             </div>
           )}
         </div>

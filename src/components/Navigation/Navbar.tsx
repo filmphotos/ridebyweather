@@ -65,11 +65,16 @@ export default function Navbar() {
 
   const isPaid = tier === "pro" || tier === "enterprise";
 
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Close mobile nav on route change
+  useEffect(() => { setMobileNavOpen(false); }, [pathname]);
+
   return (
     <nav className="sticky top-0 z-50 border-b border-gray-800 bg-gray-950/95 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2 font-bold text-xl text-white">
-          <svg className="h-7 w-7 text-sky-500" viewBox="0 0 24 24" fill="currentColor">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
+        <Link href="/" className="flex items-center gap-2 font-bold text-lg sm:text-xl text-white shrink-0">
+          <svg className="h-6 w-6 sm:h-7 sm:w-7 text-sky-500" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z" />
           </svg>
           <span>
@@ -78,7 +83,8 @@ export default function Navbar() {
           </span>
         </Link>
 
-        <div className="flex items-center gap-1">
+        {/* Desktop nav links */}
+        <div className="hidden md:flex items-center gap-1">
           {navItems.map((item) => (
             <Link
               key={item.href}
@@ -96,11 +102,12 @@ export default function Navbar() {
         </div>
 
         {/* Auth area */}
+        <div className="flex items-center gap-1">
         {user ? (
           <div className="relative">
             <button
               onClick={() => setMenuOpen((o) => !o)}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-gray-800 transition-colors"
+              className="flex items-center gap-2 rounded-lg px-2 sm:px-3 py-2 hover:bg-gray-800 transition-colors"
             >
               <div className={cn(
                 "h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold text-white",
@@ -138,6 +145,17 @@ export default function Navbar() {
                   </div>
                 </div>
 
+                <Link
+                  href="/settings"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 transition-colors border-b border-gray-800"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M7.84 1.804A1 1 0 018.82 1h2.36a1 1 0 01.98.804l.331 1.652a6.993 6.993 0 011.929 1.115l1.598-.54a1 1 0 011.186.447l1.18 2.044a1 1 0 01-.205 1.251l-1.267 1.113a7.047 7.047 0 010 2.228l1.267 1.113a1 1 0 01.206 1.25l-1.18 2.045a1 1 0 01-1.187.447l-1.598-.54a6.993 6.993 0 01-1.929 1.115l-.33 1.652a1 1 0 01-.98.804H8.82a1 1 0 01-.98-.804l-.331-1.652a6.993 6.993 0 01-1.929-1.115l-1.598.54a1 1 0 01-1.186-.447l-1.18-2.044a1 1 0 01.205-1.251l1.267-1.114a7.05 7.05 0 010-2.227L1.821 7.773a1 1 0 01-.206-1.25l1.18-2.045a1 1 0 011.187-.447l1.598.54A6.993 6.993 0 017.51 3.456l.33-1.652zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                  </svg>
+                  Settings
+                </Link>
+
                 {!isPaid && (
                   <Link
                     href="/pricing"
@@ -174,16 +192,64 @@ export default function Navbar() {
             )}
           </div>
         ) : (
-          <div className="flex items-center gap-3">
-            <Link href="/login" className="text-sm text-gray-400 hover:text-gray-100 transition-colors">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link href="/login" className="hidden sm:inline text-sm text-gray-400 hover:text-gray-100 transition-colors">
               Log in
             </Link>
-            <Link href="/signup" className="btn-primary text-sm px-4 py-2">
+            <Link href="/signup" className="btn-primary text-sm px-3 sm:px-4 py-2 whitespace-nowrap">
               Get Started
             </Link>
           </div>
         )}
+
+        {/* Mobile hamburger */}
+        <button
+          onClick={() => setMobileNavOpen((o) => !o)}
+          aria-label="Toggle navigation"
+          className="md:hidden ml-1 rounded-lg p-2 text-gray-400 hover:text-gray-100 hover:bg-gray-800 transition-colors"
+        >
+          {mobileNavOpen ? (
+            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+            </svg>
+          ) : (
+            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M2 4.75A.75.75 0 012.75 4h14.5a.75.75 0 010 1.5H2.75A.75.75 0 012 4.75zm0 10.5a.75.75 0 01.75-.75h14.5a.75.75 0 010 1.5H2.75a.75.75 0 01-.75-.75zM2 10a.75.75 0 01.75-.75h7.5a.75.75 0 010 1.5h-7.5A.75.75 0 012 10z" clipRule="evenodd" />
+            </svg>
+          )}
+        </button>
+        </div>
       </div>
+
+      {/* Mobile nav panel */}
+      {mobileNavOpen && (
+        <div className="md:hidden border-t border-gray-800 bg-gray-950/95 backdrop-blur">
+          <div className="px-4 py-3 flex flex-col gap-1">
+            {navItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  pathname?.startsWith(item.href)
+                    ? "bg-sky-500/20 text-sky-400"
+                    : "text-gray-300 hover:text-white hover:bg-gray-800"
+                )}
+              >
+                {item.label}
+              </Link>
+            ))}
+            {!user && (
+              <Link
+                href="/login"
+                className="rounded-lg px-3 py-2.5 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-800 transition-colors sm:hidden"
+              >
+                Log in
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getWeatherProvider } from "@/lib/weather";
 import { computeCyclingScore } from "@/lib/ride-score";
+import { verifyToken } from "@/lib/auth";
 
 const QuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
@@ -10,6 +11,10 @@ const QuerySchema = z.object({
 });
 
 export async function GET(req: NextRequest) {
+  const token = req.cookies.get("rbw_token")?.value;
+  const payload = token ? await verifyToken(token) : null;
+  if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
   const params = Object.fromEntries(req.nextUrl.searchParams);
   const parsed = QuerySchema.safeParse(params);
 
