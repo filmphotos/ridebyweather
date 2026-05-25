@@ -52,11 +52,14 @@ async function main() {
     });
     console.log(`Created admin user: ${user.email}`);
   } else {
-    user = await prisma.user.update({
-      where: { id: user.id },
-      data: { role: "admin" },
-    });
-    console.log(`Promoted to admin: ${user.email}`);
+    const data = { role: "admin" };
+    if (password) {
+      data.passwordHash = await bcrypt.hash(password, 10);
+    }
+    user = await prisma.user.update({ where: { id: user.id }, data });
+    console.log(
+      `Updated ${user.email} — role: admin${password ? ", password reset" : ""}`
+    );
   }
 }
 

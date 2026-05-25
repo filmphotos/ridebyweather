@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
         id: true,
         email: true,
         name: true,
+        role: true,
         subscription: { select: { tier: true, status: true } },
       },
     });

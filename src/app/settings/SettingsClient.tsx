@@ -266,6 +266,11 @@ function SettingsInner() {
           )}
         </Section>
 
+        {/* Change password */}
+        <Section title="Account">
+          <ChangePasswordForm />
+        </Section>
+
         {/* Save */}
         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
         <div className="flex items-center gap-4">
@@ -333,6 +338,115 @@ function ToggleGroup({
         ))}
       </div>
     </div>
+  );
+}
+
+function ChangePasswordForm() {
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+
+    if (next.length < 8) {
+      setMsg({ kind: "err", text: "New password must be at least 8 characters." });
+      return;
+    }
+    if (next !== confirm) {
+      setMsg({ kind: "err", text: "New passwords don't match." });
+      return;
+    }
+    if (next === current) {
+      setMsg({ kind: "err", text: "New password must be different from current." });
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const res = await fetch("/api/user/password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: current, newPassword: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg({ kind: "err", text: data.error ?? "Could not update password." });
+        return;
+      }
+      setMsg({ kind: "ok", text: "Password updated." });
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+    } catch {
+      setMsg({ kind: "err", text: "Network error. Please try again." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-1.5">Current password</label>
+        <input
+          type="password"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+          autoComplete="current-password"
+          required
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-1.5">New password</label>
+        <input
+          type="password"
+          value={next}
+          onChange={(e) => setNext(e.target.value)}
+          autoComplete="new-password"
+          required
+          minLength={8}
+          placeholder="At least 8 characters"
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-1.5">Confirm new password</label>
+        <input
+          type="password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          autoComplete="new-password"
+          required
+          minLength={8}
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+        />
+      </div>
+
+      {msg && (
+        <div
+          className={`rounded-lg px-3 py-2 text-sm ${
+            msg.kind === "ok"
+              ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
+              : "bg-red-500/10 border border-red-500/30 text-red-400"
+          }`}
+        >
+          {msg.text}
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={busy || !current || !next || !confirm}
+        className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg border border-gray-700 transition-colors"
+      >
+        {busy ? "Updating…" : "Change password"}
+      </button>
+    </form>
   );
 }
 

@@ -15,6 +15,7 @@ interface AuthUser {
   id: string;
   email: string;
   name?: string | null;
+  role?: string | null;
 }
 
 export default function Navbar() {
@@ -64,6 +65,7 @@ export default function Navbar() {
     : user?.email?.[0]?.toUpperCase() ?? "?";
 
   const isPaid = tier === "pro" || tier === "enterprise";
+  const isAdmin = user?.role === "admin";
 
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -118,7 +120,12 @@ export default function Navbar() {
               <span className="text-sm text-gray-200 max-w-[100px] truncate hidden sm:block">
                 {user.name ?? user.email}
               </span>
-              {isPaid && (
+              {isAdmin && (
+                <span className="inline-flex items-center rounded-full bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-[10px] font-bold text-amber-400 uppercase tracking-wide">
+                  Admin
+                </span>
+              )}
+              {isPaid && !isAdmin && (
                 <span className="hidden sm:inline-flex items-center rounded-full bg-sky-500/20 px-2 py-0.5 text-[10px] font-bold text-sky-400 uppercase tracking-wide">
                   {tier}
                 </span>
@@ -133,7 +140,12 @@ export default function Navbar() {
                 <div className="px-4 py-2.5 border-b border-gray-800">
                   <p className="text-xs font-medium text-gray-300 truncate">{user.name ?? user.email}</p>
                   <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                  <div className="mt-1.5">
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {isAdmin && (
+                      <span className="inline-flex items-center rounded-full bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-[10px] font-bold text-amber-400 uppercase tracking-wide">
+                        Admin
+                      </span>
+                    )}
                     <span className={cn(
                       "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
                       isPaid
@@ -144,6 +156,19 @@ export default function Navbar() {
                     </span>
                   </div>
                 </div>
+
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm text-amber-400 hover:bg-gray-800 transition-colors border-b border-gray-800"
+                  >
+                    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M9.243 3.03a1 1 0 01.514 1.397L8.06 7H17a1 1 0 010 2h-2v3h2a1 1 0 110 2h-2v3a1 1 0 11-2 0v-3h-3v3a1 1 0 11-2 0v-3H5a1 1 0 110-2h2.06l1.74-3.566A1 1 0 019.243 3.03zM11 12h2V9h-2v3z" />
+                    </svg>
+                    Admin dashboard
+                  </Link>
+                )}
 
                 <Link
                   href="/settings"
