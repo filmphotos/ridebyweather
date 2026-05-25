@@ -23,8 +23,35 @@ model User {
   preferences       UserPreferences?
   deviceIntegrations DeviceIntegration[]
   passwordResetTokens PasswordResetToken[]
+  pushSubscriptions PushSubscription[]
 
   @@map("users")
+}
+
+model PushSubscription {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  endpoint     String    @unique
+  p256dh       String
+  authKey      String
+  userAgent    String?
+
+  // Location to monitor for storms (set when the user enables alerts)
+  lat          Float?
+  lng          Float?
+  locationName String?
+
+  stormAlerts  Boolean   @default(true)
+  lastNotifiedAt DateTime?
+  failureCount Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([stormAlerts])
+  @@map("push_subscriptions")
 }
 
 model PasswordResetToken {

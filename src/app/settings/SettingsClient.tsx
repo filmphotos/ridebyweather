@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import StormAlertsToggle from "@/components/Notifications/StormAlertsToggle";
 
 interface Prefs {
   preferredUnit: "imperial" | "metric";
@@ -219,6 +220,11 @@ function SettingsInner() {
               Rides outside this range score lower. Leave blank to use defaults.
             </p>
           </div>
+        </Section>
+
+        {/* Notifications */}
+        <Section title="Notifications">
+          <StormAlertsToggle />
         </Section>
 
         {/* Connected Apps */}

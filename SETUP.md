@@ -45,6 +45,35 @@ Open http://localhost:3000
 
 ---
 
+## Storm / Lightning Push Notifications
+
+The app can push a `⚡ Storm alert` to a user's device when a thunderstorm is detected at or near their location within the next ~3 hours.
+
+### One-time VAPID key generation
+```bash
+npx web-push generate-vapid-keys
+```
+Add the output to `.env.local` and to Vercel project env:
+```
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_SUBJECT=mailto:alerts@yourdomain.com
+CRON_SECRET=<long-random-string>
+```
+
+### How it works
+- User opts in from **Settings → Notifications → Storm & lightning alerts**, which grabs their geolocation and stores a Web Push subscription via `POST /api/push/subscribe`.
+- A Vercel Cron job (see `vercel.json`, every 15 min) hits `GET /api/push/check-storms` with `Authorization: Bearer $CRON_SECRET`.
+- The handler fetches weather for each opted-in location, calls `detectStorm()`, and sends one push per device via `web-push`. A 60-minute suppression window prevents duplicate alerts.
+- The service worker (`/public/sw.js`) shows the notification and focuses the app on click.
+
+### Manual test
+1. Open Settings → Notifications → toggle on, grant the permission prompt.
+2. Click **Send test alert** — you should see `⚡ Test storm alert` on the device.
+3. To dry-run the cron locally: `curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/push/check-storms`.
+
+---
+
 ## Project Structure
 
 ```
