@@ -41,9 +41,12 @@ interface RideScoreData {
   };
 }
 
+const AUTO_REFRESH_MS = 60_000; // refresh live weather every 60s
+
 export default function CyclingDashboard() {
   const [location, setLocation] = useState<{ lat: number; lng: number; name?: string } | null>(null);
   const [data, setData] = useState<RideScoreData | null>(null);
+  const [fetchedAt, setFetchedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gender, setGender] = useState<"male" | "female">("male");
@@ -66,19 +69,29 @@ export default function CyclingDashboard() {
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchRideScore = useCallback(async (lat: number, lng: number) => {
-    setLoading(true);
+  const fetchRideScore = useCallback(async (lat: number, lng: number, opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/ride-score?lat=${lat}&lng=${lng}`);
       if (!res.ok) throw new Error("Failed to fetch ride score");
       setData(await res.json());
+      setFetchedAt(Date.now());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      if (!opts?.silent) setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, []);
+
+  // Auto-refresh weather (incl. real-feel) every 60s while a location is set
+  useEffect(() => {
+    if (!location) return;
+    const id = setInterval(() => {
+      fetchRideScore(location.lat, location.lng, { silent: true });
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [location, fetchRideScore]);
 
   const detectLocation = useCallback(async () => {
     const tryBrowserGeo = (): Promise<{ lat: number; lng: number } | null> =>
@@ -272,6 +285,7 @@ export default function CyclingDashboard() {
               windDirDeg={data.weather.windDirDeg}
               precipProb={data.weather.precipProb}
               condition={data.weather.condition}
+              fetchedAt={fetchedAt ?? undefined}
             />
             <div className="flex items-center justify-end gap-2">
               <span className="text-xs text-gray-500">Avatar:</span>

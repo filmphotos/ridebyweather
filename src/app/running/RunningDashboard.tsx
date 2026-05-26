@@ -135,9 +135,12 @@ function UVBadge({ uvIndex }: { uvIndex?: number }) {
   );
 }
 
+const AUTO_REFRESH_MS = 60_000; // refresh live weather every 60s
+
 export default function RunningDashboard() {
   const [location, setLocation] = useState<{ lat: number; lng: number; name?: string } | null>(null);
   const [data, setData] = useState<RunScoreData | null>(null);
+  const [fetchedAt, setFetchedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -148,19 +151,28 @@ export default function RunningDashboard() {
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchRunScore = useCallback(async (lat: number, lng: number) => {
-    setLoading(true);
+  const fetchRunScore = useCallback(async (lat: number, lng: number, opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     setError(null);
     try {
       const res = await fetch(`/api/run-score?lat=${lat}&lng=${lng}`);
       if (!res.ok) throw new Error("Failed to fetch run score");
       setData(await res.json());
+      setFetchedAt(Date.now());
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      if (!opts?.silent) setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!location) return;
+    const id = setInterval(() => {
+      fetchRunScore(location.lat, location.lng, { silent: true });
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [location, fetchRunScore]);
 
   const detectLocation = useCallback(() => {
     if (!navigator.geolocation) return;
@@ -316,6 +328,7 @@ export default function RunningDashboard() {
               windDirDeg={data.weather.windDirDeg}
               precipProb={data.weather.precipProb}
               condition={data.weather.condition}
+              fetchedAt={fetchedAt ?? undefined}
             />
 
             <div className="grid grid-cols-2 gap-4">
