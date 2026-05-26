@@ -109,6 +109,15 @@ async function initSqlite() {
         "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE("userId", "provider")
       )`,
+      `CREATE TABLE IF NOT EXISTS "password_reset_tokens" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "userId" TEXT NOT NULL,
+        "tokenHash" TEXT NOT NULL UNIQUE,
+        "expiresAt" DATETIME NOT NULL,
+        "usedAt" DATETIME,
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE INDEX IF NOT EXISTS "password_reset_tokens_userId_idx" ON "password_reset_tokens"("userId")`,
       `CREATE TABLE IF NOT EXISTS "partner_listings" (
         "id" TEXT NOT NULL PRIMARY KEY,
         "name" TEXT NOT NULL,

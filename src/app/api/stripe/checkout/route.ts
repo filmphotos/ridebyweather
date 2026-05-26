@@ -69,9 +69,10 @@ export async function POST(req: NextRequest) {
       });
       customerId = customer.id;
 
-      await db.subscription.update({
+      await db.subscription.upsert({
         where: { userId: user.id },
-        data: { stripeCustomerId: customerId },
+        create: { userId: user.id, tier: "free", stripeCustomerId: customerId },
+        update: { stripeCustomerId: customerId },
       });
     }
 

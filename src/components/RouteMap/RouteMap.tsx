@@ -5,6 +5,7 @@ import Map, { Source, Layer, Marker, NavigationControl } from "react-map-gl";
 import type { MapMouseEvent } from "react-map-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import StravaImport from "@/components/Strava/StravaImport";
+import ElevationProfile from "@/components/RouteMap/ElevationProfile";
 
 interface Props {
   lat: number;
@@ -74,6 +75,10 @@ function distanceMi(wps: [number, number][]): number {
 
 export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) {
   const [waypoints, setWaypoints] = useState<[number, number][]>([]);
+  const [snappedCoords, setSnappedCoords] = useState<[number, number][]>([]);
+  const [snappedDistanceMi, setSnappedDistanceMi] = useState<number | null>(null);
+  const [routing, setRouting] = useState(false);
+  const [routingError, setRoutingError] = useState<string | null>(null);
   const [reversed, setReversed] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
@@ -125,16 +130,66 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
     [waypoints, reversed]
   );
 
+  // Fetch road-snapped route from Mapbox Directions when waypoints change.
+  // Falls back to straight lines if the API fails or the token is missing.
+  useEffect(() => {
+    if (activeWaypoints.length < 2 || !token) {
+      setSnappedCoords([]);
+      setSnappedDistanceMi(null);
+      setRoutingError(null);
+      return;
+    }
+
+    const ctrl = new AbortController();
+    const timer = setTimeout(async () => {
+      setRouting(true);
+      setRoutingError(null);
+      try {
+        const coords = activeWaypoints.map(([lo, la]) => `${lo},${la}`).join(";");
+        const url =
+          `https://api.mapbox.com/directions/v5/mapbox/cycling/${coords}` +
+          `?geometries=geojson&overview=full&access_token=${encodeURIComponent(token)}`;
+        const res = await fetch(url, { signal: ctrl.signal });
+        if (!res.ok) throw new Error(`Directions ${res.status}`);
+        const data = (await res.json()) as {
+          routes?: { geometry: { coordinates: [number, number][] }; distance: number }[];
+        };
+        const route = data.routes?.[0];
+        if (!route) throw new Error("No route found");
+        setSnappedCoords(route.geometry.coordinates);
+        setSnappedDistanceMi(route.distance / 1609.34);
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        setSnappedCoords([]);
+        setSnappedDistanceMi(null);
+        setRoutingError("Couldn't snap to roads — showing direct line");
+      } finally {
+        setRouting(false);
+      }
+    }, 350);
+
+    return () => {
+      ctrl.abort();
+      clearTimeout(timer);
+    };
+  }, [activeWaypoints, token]);
+
+  // Path used for wind coloring + display: snapped if available, else raw waypoints.
+  const pathCoords = useMemo(
+    () => (snappedCoords.length >= 2 ? snappedCoords : activeWaypoints),
+    [snappedCoords, activeWaypoints]
+  );
+
   const segments: Segment[] = useMemo(() => {
-    return activeWaypoints.slice(0, -1).map((p, i) => {
+    return pathCoords.slice(0, -1).map((p, i) => {
       const bearing = bearingBetween(
-        activeWaypoints[i][1], activeWaypoints[i][0],
-        activeWaypoints[i + 1][1], activeWaypoints[i + 1][0]
+        pathCoords[i][1], pathCoords[i][0],
+        pathCoords[i + 1][1], pathCoords[i + 1][0]
       );
       const windType = classifySegment(bearing, windDirDeg);
-      return { from: p, to: activeWaypoints[i + 1], windType, color: WIND_COLORS[windType] };
+      return { from: p, to: pathCoords[i + 1], windType, color: WIND_COLORS[windType] };
     });
-  }, [activeWaypoints, windDirDeg]);
+  }, [pathCoords, windDirDeg]);
 
   const routeGeoJSON = useMemo(() => ({
     type: "FeatureCollection" as const,
@@ -165,7 +220,10 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
   }, [stats]);
 
   const windArrowDeg = (windDirDeg + 180) % 360;
-  const routeDistanceMi = useMemo(() => distanceMi(activeWaypoints), [activeWaypoints]);
+  const routeDistanceMi = useMemo(
+    () => snappedDistanceMi ?? distanceMi(activeWaypoints),
+    [snappedDistanceMi, activeWaypoints]
+  );
 
   async function handleSaveRoute() {
     if (!routeName.trim()) return;
@@ -243,9 +301,16 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
           <h3 className="font-semibold text-white">Route Wind Planner</h3>
           <p className="text-xs text-gray-500 mt-0.5">
             {waypoints.length === 0
-              ? "Tap the map to add waypoints"
-              : `${waypoints.length} waypoints · ${segments.length} segments · ${routeDistanceMi.toFixed(1)} mi`}
+              ? "Tap the map to add waypoints — route follows roads"
+              : routing
+                ? `${waypoints.length} waypoints · routing…`
+                : `${waypoints.length} waypoints · ${routeDistanceMi.toFixed(1)} mi${
+                    snappedCoords.length >= 2 ? " · road-snapped" : ""
+                  }`}
           </p>
+          {routingError && (
+            <p className="text-xs text-amber-400 mt-0.5">{routingError}</p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {isLoggedIn && waypoints.length >= 2 && (
@@ -289,7 +354,13 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
           )}
           {waypoints.length > 0 && (
             <button
-              onClick={() => { setWaypoints([]); setReversed(false); }}
+              onClick={() => {
+                setWaypoints([]);
+                setReversed(false);
+                setSnappedCoords([]);
+                setSnappedDistanceMi(null);
+                setRoutingError(null);
+              }}
               className="rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-800 transition-colors"
             >
               Clear
@@ -493,6 +564,9 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
           </div>
         )}
       </div>
+
+      {/* Live elevation + gradient profile */}
+      <ElevationProfile waypoints={pathCoords} />
 
       {/* Legend */}
       <div className="mt-3 flex flex-wrap items-center justify-center gap-x-6 gap-y-1.5 text-xs text-gray-500">

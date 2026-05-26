@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { deleteRide, downloadGpx, loadRides, type RideRecord } from "@/lib/ride/rideStorage";
 import { fmtDuration } from "@/lib/ride/rideMath";
+import RidePhotos from "@/components/RidePhotos/RidePhotos";
 
 export default function RideHistory() {
   const [rides, setRides] = useState<RideRecord[]>([]);
@@ -81,7 +82,7 @@ export default function RideHistory() {
           onClick={() => setSelected(null)}
         >
           <div
-            className="w-full max-w-2xl rounded-2xl border border-gray-800 bg-gray-950 p-5"
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-gray-800 bg-gray-950 p-5"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
@@ -124,6 +125,10 @@ export default function RideHistory() {
               >
                 Delete
               </button>
+            </div>
+
+            <div className="mt-6 border-t border-gray-800 pt-5">
+              <RidePhotos rideId={selected.id} />
             </div>
           </div>
         </div>

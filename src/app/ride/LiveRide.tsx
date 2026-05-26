@@ -17,6 +17,7 @@ import {
   type WindRelative,
 } from "@/lib/ride/rideMath";
 import { saveRide, type RideRecord } from "@/lib/ride/rideStorage";
+import { addPhoto, requestPersistence } from "@/lib/photos/photoStore";
 
 const RideMap = dynamic(() => import("./RideMap"), { ssr: false });
 
@@ -92,6 +93,33 @@ export default function LiveRide() {
   useEffect(() => { pointsRef.current = points; }, [points]);
 
   const wakeLock = useWakeLock(state === "recording" || state === "paused");
+
+  // Quick photo capture — saves to IndexedDB scoped to the current ride id.
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [photoStatus, setPhotoStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [photoCount, setPhotoCount] = useState(0);
+
+  const handlePhotoFiles = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0 || !startedAtRef.current) return;
+    setPhotoStatus("saving");
+    try {
+      await requestPersistence();
+      const rideId = `ride_${startedAtRef.current}`;
+      let added = 0;
+      for (const f of Array.from(files)) {
+        if (!f.type.startsWith("image/")) continue;
+        await addPhoto(f, { rideId });
+        added++;
+      }
+      setPhotoCount((c) => c + added);
+      setPhotoStatus("saved");
+      setTimeout(() => setPhotoStatus("idle"), 1500);
+    } catch {
+      setPhotoStatus("idle");
+    } finally {
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  }, []);
 
   // Tick clock for elapsed-time displays
   useEffect(() => {
@@ -301,6 +329,7 @@ export default function LiveRide() {
     setDescentFt(0);
     setMaxSpeedMs(0);
     setLaps([]);
+    setPhotoCount(0);
     startedAtRef.current = Date.now();
     lastMoveTRef.current = Date.now();
     setState("recording");
@@ -399,6 +428,22 @@ export default function LiveRide() {
           <Link href="/ride/history" className="text-gray-500 hover:text-sky-400">History</Link>
         </div>
         <div className="flex items-center gap-3 text-gray-500">
+          {state !== "idle" && (
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              disabled={photoStatus === "saving"}
+              className="inline-flex items-center gap-1 rounded-md border border-gray-700 bg-gray-800 hover:bg-gray-700 px-2 py-1 text-gray-300 disabled:opacity-50"
+              aria-label="Add photo to this ride"
+            >
+              <span>📷</span>
+              <span className="text-[11px]">
+                {photoStatus === "saving" ? "Saving…"
+                  : photoStatus === "saved" ? "Saved ✓"
+                  : photoCount > 0 ? `Photo (${photoCount})` : "Photo"}
+              </span>
+            </button>
+          )}
           {wakeLock.supported && (
             <span className={wakeLock.held ? "text-emerald-400" : "text-gray-600"}>
               {wakeLock.held ? "● screen on" : "○ screen on"}
@@ -409,6 +454,16 @@ export default function LiveRide() {
           </span>
         </div>
       </div>
+
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        multiple
+        className="hidden"
+        onChange={(e) => handlePhotoFiles(e.target.files)}
+      />
 
       {error && (
         <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-red-400 text-sm">

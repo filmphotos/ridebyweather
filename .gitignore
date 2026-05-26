@@ -24,3 +24,7 @@ npm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 .vercel
+
+# Large source artwork (split into per-condition avatars in public/avatars/)
+public/running-avatars-grid.png
+scripts/_debug-col*.png

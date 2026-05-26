@@ -41,7 +41,10 @@ export async function fetchFoursquareBikeShops(
   const url = new URL(FSQ_URL);
   url.searchParams.set("ll", `${lat},${lng}`);
   url.searchParams.set("radius", String(radiusM));
-  url.searchParams.set("query", "bike shop");
+  // 17005 = Bike Shop in Foursquare's category taxonomy. Using the category
+  // filter (not a text query) avoids false positives like hospitals whose
+  // names happen to contain "bike" or "shop".
+  url.searchParams.set("categories", "17005");
   url.searchParams.set("limit", "50");
 
   try {

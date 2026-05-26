@@ -2,6 +2,7 @@
 // We do not POST to the server yet — keeps the live ride screen offline-friendly.
 
 import type { TrackPoint } from "./rideMath";
+import { deletePhotosForRide } from "@/lib/photos/photoStore";
 
 const KEY = "rbw_rides_v1";
 const MAX_RIDES = 30;
@@ -56,6 +57,9 @@ export function deleteRide(id: string): void {
   if (typeof window === "undefined") return;
   const next = loadRides().filter((r) => r.id !== id);
   localStorage.setItem(KEY, JSON.stringify(next));
+  // Cascade: photos are keyed by ride id in IndexedDB. Fire-and-forget — we don't
+  // want a delete UI to wait on it, and orphan cleanup is harmless if it fails.
+  deletePhotosForRide(id).catch(() => {});
 }
 
 export function rideToGpx(ride: RideRecord): string {

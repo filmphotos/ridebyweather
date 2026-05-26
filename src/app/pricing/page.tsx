@@ -42,7 +42,7 @@ const plans = [
       "Headwind/tailwind per segment",
       "Auto reverse route suggestion",
       "Unlimited saved routes",
-      "Garmin & Wahoo push alerts",
+      "Garmin & Wahoo push alerts (coming soon)",
       "Strava sync",
       "Historical weather replay",
     ],

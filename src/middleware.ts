@@ -8,12 +8,16 @@ const PUBLIC_PAGES = new Set<string>([
   "/pricing",
   "/upgrade/success",
   "/admin/login",
+  "/forgot-password",
+  "/reset-password",
 ]);
 
 const PUBLIC_API_PREFIXES = [
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/me",
+  "/api/auth/forgot-password",
+  "/api/auth/reset-password",
   "/api/admin/me",
   "/api/stripe/webhook",
   "/api/strava/callback",

@@ -7,9 +7,16 @@ interface WeatherAvatarProps {
   precipProb: number;
   windSpeedMph: number;
   gender?: "male" | "female";
+  sport?: "cycling" | "running";
 }
 
-function selectAvatar(tempF: number, precipProb: number, windSpeedMph: number, gender: "male" | "female"): string {
+function selectAvatar(
+  tempF: number,
+  precipProb: number,
+  windSpeedMph: number,
+  gender: "male" | "female",
+  sport: "cycling" | "running",
+): string {
   const isRainy = precipProb > 0.4;
   const isHeavyRain = precipProb > 0.7;
   const isWindy = windSpeedMph > 18;
@@ -26,7 +33,7 @@ function selectAvatar(tempF: number, precipProb: number, windSpeedMph: number, g
   else if (tempF < 72) condition = "mild";
   else condition = "hot";
 
-  return `/avatars/cycling-${gender}-${condition}.png`;
+  return `/avatars/${sport}-${gender}-${condition}.png`;
 }
 
 interface GearItem {
@@ -61,22 +68,33 @@ function getOutfit(tempF: number, precipProb: number, windSpeedMph: number) {
   };
 }
 
-function buildGearList(tempF: number, precipProb: number, windSpeedMph: number): GearItem[] {
+function buildGearList(tempF: number, precipProb: number, windSpeedMph: number, sport: "cycling" | "running"): GearItem[] {
   const isRainy = precipProb > 0.4;
   const isWindy = windSpeedMph > 15;
+  const isRun = sport === "running";
   const items: GearItem[] = [];
 
   // Base
   if (tempF < 50) {
     items.push({ item: "Thermal base layer", reason: `${Math.round(tempF)}°F — insulation needed`, required: true, category: "base" });
   } else {
-    items.push({ item: "Cycling jersey", reason: tempF >= 70 ? "Warm weather — moisture wicking" : "Standard base layer", required: true, category: "base" });
+    items.push({
+      item: isRun ? "Technical running shirt" : "Cycling jersey",
+      reason: tempF >= 70 ? "Warm weather — moisture wicking" : "Standard base layer",
+      required: true,
+      category: "base",
+    });
   }
   // Layers
   if (isRainy) {
     items.push({ item: "Waterproof rain jacket", reason: `${Math.round(precipProb * 100)}% rain probability`, required: precipProb > 0.6, category: "layer" });
   } else if (tempF < 50) {
-    items.push({ item: "Insulated cycling jacket", reason: "Below 50°F — full insulation", required: true, category: "layer" });
+    items.push({
+      item: isRun ? "Insulated running jacket" : "Insulated cycling jacket",
+      reason: "Below 50°F — full insulation",
+      required: true,
+      category: "layer",
+    });
   } else if (tempF < 60) {
     items.push({ item: "Arm warmers", reason: `${Math.round(tempF)}°F — core stays warm`, required: false, category: "layer" });
     if (isWindy) items.push({ item: "Wind vest", reason: `${Math.round(windSpeedMph)} mph wind chill`, required: false, category: "layer" });
@@ -85,29 +103,54 @@ function buildGearList(tempF: number, precipProb: number, windSpeedMph: number):
   }
   // Legs
   if (tempF < 40) {
-    items.push({ item: "Thermal tights", reason: "Below 40°F — full leg insulation", required: true, category: "legs" });
+    items.push({
+      item: isRun ? "Thermal running tights" : "Thermal tights",
+      reason: "Below 40°F — full leg insulation",
+      required: true,
+      category: "legs",
+    });
   } else if (tempF < 55) {
-    items.push({ item: "Leg warmers", reason: `${Math.round(tempF)}°F — legs need coverage`, required: tempF < 48, category: "legs" });
+    items.push({
+      item: isRun ? "Running tights" : "Leg warmers",
+      reason: `${Math.round(tempF)}°F — legs need coverage`,
+      required: tempF < 48,
+      category: "legs",
+    });
   }
   // Accessories
   if (tempF < 55) {
-    items.push({ item: "Cycling gloves", reason: tempF < 40 ? "Full fingered — near freezing" : "Cold hands impair braking", required: tempF < 45, category: "accessory" });
+    items.push({
+      item: isRun ? "Running gloves" : "Cycling gloves",
+      reason: tempF < 40 ? "Full fingered — near freezing" : isRun ? "Hands lose heat quickly" : "Cold hands impair braking",
+      required: tempF < 45,
+      category: "accessory",
+    });
   }
-  if (tempF < 50 || isRainy) {
-    items.push({ item: "Shoe covers", reason: isRainy ? "Waterproof overshoes" : "Foot warmth critical", required: tempF < 40 || (isRainy && tempF < 55), category: "accessory" });
+  if (isRun) {
+    if (tempF < 40) {
+      items.push({ item: "Beanie / ear warmers", reason: "Most body heat lost from head", required: tempF < 35, category: "accessory" });
+    } else if (tempF >= 70) {
+      items.push({ item: "Visor or cap", reason: "Sun & sweat shield", required: false, category: "accessory" });
+    }
+  } else {
+    if (tempF < 50 || isRainy) {
+      items.push({ item: "Shoe covers", reason: isRainy ? "Waterproof overshoes" : "Foot warmth critical", required: tempF < 40 || (isRainy && tempF < 55), category: "accessory" });
+    }
   }
   if (!isRainy) {
     items.push({ item: "Sunglasses", reason: "Eye protection & wind shield", required: false, category: "accessory" });
   }
-  items.push({ item: "Helmet", reason: "Always required", required: true, category: "accessory" });
+  if (!isRun) {
+    items.push({ item: "Helmet", reason: "Always required", required: true, category: "accessory" });
+  }
 
   return items;
 }
 
-export default function WeatherAvatar({ tempF, precipProb, windSpeedMph, gender = "male" }: WeatherAvatarProps) {
-  const gear = buildGearList(tempF, precipProb, windSpeedMph);
+export default function WeatherAvatar({ tempF, precipProb, windSpeedMph, gender = "male", sport = "cycling" }: WeatherAvatarProps) {
+  const gear = buildGearList(tempF, precipProb, windSpeedMph, sport);
   const isRainy = precipProb > 0.4;
-  const avatarSrc = selectAvatar(tempF, precipProb, windSpeedMph, gender);
+  const avatarSrc = selectAvatar(tempF, precipProb, windSpeedMph, gender, sport);
 
   const conditionLabel =
     tempF < 40 ? "Very Cold" : tempF < 55 ? "Cold" : tempF < 68 ? "Mild" : tempF < 80 ? "Warm" : "Hot";
@@ -144,7 +187,7 @@ export default function WeatherAvatar({ tempF, precipProb, windSpeedMph, gender 
           <div className="rounded-xl bg-[#f5f0e8] p-2 shadow-md">
             <Image
               src={avatarSrc}
-              alt={`Cyclist outfit for ${Math.round(tempF)}°F${isRainy ? ", rain" : ""}`}
+              alt={`${sport === "running" ? "Runner" : "Cyclist"} outfit for ${Math.round(tempF)}°F${isRainy ? ", rain" : ""}`}
               width={156}
               height={156}
               className="w-[156px] h-[156px] object-contain"

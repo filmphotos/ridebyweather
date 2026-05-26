@@ -342,6 +342,7 @@ export default function RunningDashboard() {
               tempF={data.weather.tempF}
               precipProb={data.weather.precipProb}
               windSpeedMph={data.weather.windSpeedMph}
+              sport="running"
             />
           </div>
 

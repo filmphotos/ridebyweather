@@ -28,7 +28,7 @@ export default function UpgradeSuccessPage() {
             <li className="flex items-center gap-2"><span className="text-green-400">✓</span> Headwind / tailwind per route segment</li>
             <li className="flex items-center gap-2"><span className="text-green-400">✓</span> Auto reverse-route suggestions</li>
             <li className="flex items-center gap-2"><span className="text-green-400">✓</span> Unlimited saved routes</li>
-            <li className="flex items-center gap-2"><span className="text-green-400">✓</span> Garmin &amp; Wahoo push alerts</li>
+            <li className="flex items-center gap-2"><span className="text-green-400">✓</span> Garmin &amp; Wahoo push alerts (coming soon)</li>
           </ul>
         </div>
 

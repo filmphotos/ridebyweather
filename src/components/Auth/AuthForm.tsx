@@ -122,9 +122,19 @@ export default function AuthForm({ mode, plan }: AuthFormProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-sm font-medium text-gray-300">
+                  Password
+                </label>
+                {!isSignup && (
+                  <Link
+                    href="/forgot-password"
+                    className="text-xs text-sky-400 hover:text-sky-300 font-medium"
+                  >
+                    Forgot password?
+                  </Link>
+                )}
+              </div>
               <input
                 type="password"
                 value={password}
