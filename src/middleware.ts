@@ -21,6 +21,8 @@ const PUBLIC_API_PREFIXES = [
   "/api/admin/me",
   "/api/stripe/webhook",
   "/api/strava/callback",
+  // Cron endpoint — authenticates with CRON_SECRET in the handler, no user cookie.
+  "/api/push/check-storms",
 ];
 
 function isPublicApi(pathname: string): boolean {
@@ -53,6 +55,6 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|manifest.json|robots.txt|sitemap.xml|.*\\.png$|.*\\.jpg$|.*\\.jpeg$|.*\\.svg$|.*\\.webp$|.*\\.gif$|.*\\.ico$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.json|robots.txt|sitemap.xml|sw.js|.*\\.png$|.*\\.jpg$|.*\\.jpeg$|.*\\.svg$|.*\\.webp$|.*\\.gif$|.*\\.ico$).*)",
   ],
 };
