@@ -7,10 +7,12 @@ import { cn } from "@/lib/utils";
 
 const navItems = [
   { label: "Cycling", href: "/cycling" },
-  { label: "Ride", href: "/ride" },
   { label: "Running", href: "/running" },
+  { label: "Walking", href: "/walking" },
+  { label: "Ride", href: "/ride" },
   { label: "Group Rides", href: "/group-rides" },
   { label: "E-Bike Laws", href: "/ebike-laws" },
+  { label: "Features", href: "/features" },
   { label: "Pricing", href: "/pricing" },
 ];
 

@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 const CreateSchema = z.object({
   name: z.string().min(1).max(120),
   description: z.string().max(2000).optional().nullable(),
-  sport: z.enum(["cycling", "running"]).default("cycling"),
+  sport: z.enum(["cycling", "running", "walking"]).default("cycling"),
   startTime: z.string().refine((v) => !Number.isNaN(Date.parse(v)), "Invalid startTime"),
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
     where.startTime = { gte: new Date() };
   }
 
-  if (sport === "cycling" || sport === "running") {
+  if (sport === "cycling" || sport === "running" || sport === "walking") {
     where.sport = sport;
   }
 

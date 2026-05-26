@@ -6,6 +6,7 @@ const PUBLIC_PAGES = new Set<string>([
   "/login",
   "/signup",
   "/pricing",
+  "/features",
   "/upgrade/success",
   "/admin/login",
   "/forgot-password",

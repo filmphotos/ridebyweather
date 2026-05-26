@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect } from "react";
-import Map, { Source, Layer, Marker, NavigationControl } from "react-map-gl";
-import type { MapMouseEvent } from "react-map-gl";
+import { Map, Source, Layer, Marker, NavigationControl } from "react-map-gl/mapbox";
+import type { MapMouseEvent } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import StravaImport from "@/components/Strava/StravaImport";
 import ElevationProfile from "@/components/RouteMap/ElevationProfile";
@@ -524,6 +524,14 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
               />
             </Source>
           )}
+
+          {/* "You are here" marker — pulsing dot at the dashboard's detected location */}
+          <Marker longitude={lng} latitude={lat} anchor="center">
+            <div className="relative" title="Your location">
+              <div className="absolute -inset-3 rounded-full bg-sky-500/30 animate-ping" />
+              <div className="relative h-4 w-4 rounded-full bg-sky-500 border-2 border-white shadow-lg" />
+            </div>
+          </Marker>
 
           {activeWaypoints.map((wp, i) => (
             <Marker key={`${i}-${wp[0]}-${wp[1]}`} longitude={wp[0]} latitude={wp[1]} anchor="center">

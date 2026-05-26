@@ -87,7 +87,7 @@ export async function GET(
     }
     if (best) {
       const result =
-        ride.sport === "running"
+        ride.sport === "running" || ride.sport === "walking"
           ? computeRunScore(best.weather)
           : computeCyclingScore(best.weather);
       const color = "hexColor" in result ? result.hexColor : result.color;

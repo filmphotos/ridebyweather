@@ -22,7 +22,7 @@ interface RideListItem {
 }
 
 type Scope = "upcoming" | "mine";
-type SportFilter = "all" | "cycling" | "running";
+type SportFilter = "all" | "cycling" | "running" | "walking";
 
 export default function GroupRidesClient() {
   const [rides, setRides] = useState<RideListItem[]>([]);
@@ -106,7 +106,7 @@ export default function GroupRidesClient() {
         </div>
 
         <div className="inline-flex rounded-lg border border-gray-800 bg-gray-900 p-0.5 text-xs">
-          {(["all", "cycling", "running"] as const).map((s) => (
+          {(["all", "cycling", "running", "walking"] as const).map((s) => (
             <button
               key={s}
               onClick={() => setSport(s)}
@@ -160,6 +160,8 @@ export default function GroupRidesClient() {
                     className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                       r.sport === "running"
                         ? "bg-orange-500/20 text-orange-400"
+                        : r.sport === "walking"
+                        ? "bg-emerald-500/20 text-emerald-400"
                         : "bg-sky-500/20 text-sky-400"
                     }`}
                   >

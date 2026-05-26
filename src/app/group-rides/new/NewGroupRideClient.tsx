@@ -12,7 +12,7 @@ export default function NewGroupRideClient() {
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [sport, setSport] = useState<"cycling" | "running">("cycling");
+  const [sport, setSport] = useState<"cycling" | "running" | "walking">("cycling");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [pace, setPace] = useState("");
@@ -177,7 +177,7 @@ export default function NewGroupRideClient() {
 
         <Field label="Sport">
           <div className="inline-flex rounded-lg border border-gray-800 bg-gray-900 p-0.5 text-sm">
-            {(["cycling", "running"] as const).map((s) => (
+            {(["cycling", "running", "walking"] as const).map((s) => (
               <button
                 type="button"
                 key={s}

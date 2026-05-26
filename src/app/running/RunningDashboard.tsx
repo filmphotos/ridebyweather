@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import ForecastTimeline from "@/components/Forecast/ForecastTimeline";
 import WeatherCard from "@/components/WeatherCard/WeatherCard";
 import WeatherAvatar from "@/components/WeatherAvatar/WeatherAvatar";
@@ -137,7 +138,18 @@ function UVBadge({ uvIndex }: { uvIndex?: number }) {
 
 const AUTO_REFRESH_MS = 60_000; // refresh live weather every 60s
 
-export default function RunningDashboard() {
+interface RunningDashboardProps {
+  // Walking shares this dashboard since the score factors (heat, humidity, precip, AQ) apply identically.
+  // Only the UI copy + the Start button's sport param differ.
+  variant?: "running" | "walking";
+}
+
+export default function RunningDashboard({ variant = "running" }: RunningDashboardProps = {}) {
+  const isWalking = variant === "walking";
+  const verb       = isWalking ? "Walk"            : "Run";
+  const heading    = isWalking ? "Walking Dashboard" : "Running Dashboard";
+  const emptyEmoji = isWalking ? "🚶"              : "🏃";
+  const emptyCopy  = isWalking ? "Walk Score"       : "Run Score";
   const [location, setLocation] = useState<{ lat: number; lng: number; name?: string } | null>(null);
   const [data, setData] = useState<RunScoreData | null>(null);
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
@@ -229,7 +241,7 @@ export default function RunningDashboard() {
       {/* Header */}
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">Running Dashboard</h1>
+          <h1 className="text-2xl font-bold text-white">{heading}</h1>
           {location && (
             <p className="text-sm text-gray-500 mt-1">
               {location.name ?? `${location.lat.toFixed(3)}, ${location.lng.toFixed(3)}`}
@@ -284,6 +296,12 @@ export default function RunningDashboard() {
             >
               {loading ? "…" : "Refresh"}
             </button>
+            <Link
+              href={`/ride?sport=${variant}`}
+              className="btn-primary text-sm px-4 py-2 flex-1 sm:flex-none whitespace-nowrap text-center bg-red-600 hover:bg-red-500"
+            >
+              ▶ Start {verb}
+            </Link>
           </div>
         </div>
       </div>
@@ -355,7 +373,7 @@ export default function RunningDashboard() {
               tempF={data.weather.tempF}
               precipProb={data.weather.precipProb}
               windSpeedMph={data.weather.windSpeedMph}
-              sport="running"
+              sport={variant}
             />
           </div>
 
@@ -366,16 +384,16 @@ export default function RunningDashboard() {
             </div>
           )}
 
-          {/* Nearby running stores */}
+          {/* Nearby running stores — partners table is keyed by "running"; walking shares it */}
           {location && (
             <div className="lg:col-span-1">
               <NearbyPartners lat={location.lat} lng={location.lng} sport="running" />
             </div>
           )}
 
-          {/* Run Score formula explainer */}
+          {/* Run/Walk Score formula explainer */}
           <div className={location ? "lg:col-span-2 card" : "lg:col-span-3 card"}>
-            <h3 className="font-semibold text-white mb-4">How Run Score is calculated</h3>
+            <h3 className="font-semibold text-white mb-4">How {emptyCopy} is calculated</h3>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               {BREAKDOWN_FACTORS.map(({ key, label, icon, weight }) => {
                 const val = data.breakdown[key];
@@ -402,9 +420,9 @@ export default function RunningDashboard() {
 
       {!loading && !data && !error && (
         <div className="flex flex-col items-center justify-center gap-4 py-24 text-center">
-          <div className="text-6xl">🏃</div>
+          <div className="text-6xl">{emptyEmoji}</div>
           <h2 className="text-xl font-semibold text-white">Ready to check conditions?</h2>
-          <p className="text-gray-400">Allow location access or search a city to get your Run Score.</p>
+          <p className="text-gray-400">Allow location access or search a city to get your {emptyCopy}.</p>
           <button onClick={detectLocation} className="btn-primary">Use My Location</button>
         </div>
       )}

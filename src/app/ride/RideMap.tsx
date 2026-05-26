@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useRef, useEffect } from "react";
-import Map, { Source, Layer, Marker, NavigationControl } from "react-map-gl";
-import type { MapRef } from "react-map-gl";
+import { Map, Source, Layer, Marker, NavigationControl } from "react-map-gl/mapbox";
+import type { MapRef } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { TrackPoint } from "@/lib/ride/rideMath";
 
