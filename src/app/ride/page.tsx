@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -15,5 +16,11 @@ export default async function RidePage() {
   const payload = token ? await verifyToken(token) : null;
   if (!payload) redirect("/login?next=/ride");
 
-  return <LiveRide />;
+  return (
+    <Suspense fallback={
+      <div className="mx-auto max-w-5xl px-3 py-6 text-sm text-gray-500">Loading activity…</div>
+    }>
+      <LiveRide />
+    </Suspense>
+  );
 }
