@@ -7,7 +7,7 @@ interface WeatherAvatarProps {
   precipProb: number;
   windSpeedMph: number;
   gender?: "male" | "female";
-  sport?: "cycling" | "running";
+  sport?: "cycling" | "running" | "walking";
 }
 
 function selectAvatar(
@@ -15,8 +15,10 @@ function selectAvatar(
   precipProb: number,
   windSpeedMph: number,
   gender: "male" | "female",
-  sport: "cycling" | "running",
+  sport: "cycling" | "running" | "walking",
 ): string {
+  // Walking shares the running avatar set (same gear logic, no separate art)
+  const avatarSport = sport === "walking" ? "running" : sport;
   const isRainy = precipProb > 0.4;
   const isHeavyRain = precipProb > 0.7;
   const isWindy = windSpeedMph > 18;
@@ -33,7 +35,7 @@ function selectAvatar(
   else if (tempF < 72) condition = "mild";
   else condition = "hot";
 
-  return `/avatars/${sport}-${gender}-${condition}.png`;
+  return `/avatars/${avatarSport}-${gender}-${condition}.png`;
 }
 
 interface GearItem {
@@ -68,10 +70,11 @@ function getOutfit(tempF: number, precipProb: number, windSpeedMph: number) {
   };
 }
 
-function buildGearList(tempF: number, precipProb: number, windSpeedMph: number, sport: "cycling" | "running"): GearItem[] {
+function buildGearList(tempF: number, precipProb: number, windSpeedMph: number, sport: "cycling" | "running" | "walking"): GearItem[] {
   const isRainy = precipProb > 0.4;
   const isWindy = windSpeedMph > 15;
-  const isRun = sport === "running";
+  // Walking shares running's gear logic (no helmet, lighter layers).
+  const isRun = sport === "running" || sport === "walking";
   const items: GearItem[] = [];
 
   // Base

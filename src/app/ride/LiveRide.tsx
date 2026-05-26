@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useWakeLock } from "@/lib/useWakeLock";
 import {
   altDeltaFt,
@@ -16,13 +17,25 @@ import {
   type TrackPoint,
   type WindRelative,
 } from "@/lib/ride/rideMath";
-import { saveRide, type RideRecord } from "@/lib/ride/rideStorage";
+import { saveRide, type RideRecord, type RideSport } from "@/lib/ride/rideStorage";
 import { addPhoto, requestPersistence } from "@/lib/photos/photoStore";
+import type { GeoResult } from "@/app/api/geocode/route";
+import WeatherAvatar from "@/components/WeatherAvatar/WeatherAvatar";
 
 const RideMap = dynamic(() => import("./RideMap"), { ssr: false });
 
 type Tab = "stats" | "map" | "weather";
 type State = "idle" | "recording" | "paused" | "ended";
+
+const SPORTS: Array<{ id: RideSport; label: string; emoji: string; verb: string; noun: string }> = [
+  { id: "cycling", label: "Cycling", emoji: "🚴", verb: "Ride", noun: "ride" },
+  { id: "running", label: "Running", emoji: "🏃", verb: "Run",  noun: "run"  },
+  { id: "walking", label: "Walking", emoji: "🚶", verb: "Walk", noun: "walk" },
+];
+
+function isSport(v: unknown): v is RideSport {
+  return v === "cycling" || v === "running" || v === "walking";
+}
 
 interface WeatherSnapshot {
   tempF: number;
@@ -61,6 +74,27 @@ const NEW_LAP_DIST_MI = 1;                         // auto-lap each mile
 
 export default function LiveRide() {
   // --- state --------------------------------------------------------------
+  const searchParams = useSearchParams();
+  const [sport, setSportState] = useState<RideSport>("cycling");
+  const sportMeta = SPORTS.find((s) => s.id === sport) ?? SPORTS[0];
+
+  // Hydrate sport from URL ?sport= then localStorage; persist on change
+  useEffect(() => {
+    const fromUrl = searchParams?.get("sport");
+    if (isSport(fromUrl)) {
+      setSportState(fromUrl);
+      localStorage.setItem("rbw_sport", fromUrl);
+      return;
+    }
+    const saved = localStorage.getItem("rbw_sport");
+    if (isSport(saved)) setSportState(saved);
+  }, [searchParams]);
+
+  const setSport = (s: RideSport) => {
+    setSportState(s);
+    localStorage.setItem("rbw_sport", s);
+  };
+
   const [state, setState] = useState<State>("idle");
   const [tab, setTab] = useState<Tab>("stats");
   const [points, setPoints] = useState<TrackPoint[]>([]);
@@ -77,10 +111,34 @@ export default function LiveRide() {
   const [maxSpeedMs, setMaxSpeedMs] = useState(0);
   const [now, setNow] = useState(Date.now());
 
-  // Weather
+  // Weather — keyed off a `weatherLoc` that's independent of the GPS track,
+  // so the panels still populate when location is denied or before the first fix.
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
   const [forecast, setForecast] = useState<ForecastPoint[]>([]);
   const [weatherLoading, setWeatherLoading] = useState(false);
+  const [weatherLoc, setWeatherLoc] = useState<
+    { lat: number; lng: number; name?: string; source: "gps" | "ip" | "search" } | null
+  >(null);
+
+  // Avatar gender — shared with /cycling via the same localStorage key
+  const [gender, setGender] = useState<"male" | "female">("male");
+  useEffect(() => {
+    const saved = localStorage.getItem("rbw_gender");
+    if (saved === "male" || saved === "female") setGender(saved);
+  }, []);
+  const updateGender = (g: "male" | "female") => {
+    setGender(g);
+    localStorage.setItem("rbw_gender", g);
+  };
+
+  // Manual city search (used as final fallback when GPS + IP both fail or the rider wants
+  // weather for a different spot)
+  const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<GeoResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refs to avoid stale closures in geolocation callback
   const stateRef = useRef(state);
@@ -88,6 +146,7 @@ export default function LiveRide() {
   const lastMoveTRef = useRef<number | null>(null);
   const watchIdRef = useRef<number | null>(null);
   const startedAtRef = useRef<number | null>(null);
+  const endedAtRef = useRef<number | null>(null);
   const lastWeatherFetchRef = useRef<{ t: number; lat: number; lng: number } | null>(null);
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { pointsRef.current = points; }, [points]);
@@ -177,12 +236,57 @@ export default function LiveRide() {
     [fetchWeather]
   );
 
+  // --- weather location fallback chain -----------------------------------
+  // 1) GPS fixes from handlePosition set source: "gps" (preferred)
+  // 2) If no GPS within ~3s OR geo errors, fall back to /api/geo-ip
+  // 3) Manual search overrides everything
+  const weatherLocRef = useRef(weatherLoc);
+  useEffect(() => { weatherLocRef.current = weatherLoc; }, [weatherLoc]);
+
+  const tryIpFallback = useCallback(async () => {
+    // Don't clobber a GPS or user-picked location
+    if (weatherLocRef.current && weatherLocRef.current.source !== "ip") return;
+    if (weatherLocRef.current?.source === "ip") return;
+    try {
+      const res = await fetch("/api/geo-ip");
+      if (!res.ok) return;
+      const d = await res.json();
+      if (typeof d.lat === "number" && typeof d.lng === "number") {
+        // Functional setter: if GPS / search landed during the await, keep it.
+        setWeatherLoc((prev) =>
+          prev && prev.source !== "ip"
+            ? prev
+            : { lat: d.lat, lng: d.lng, name: d.name, source: "ip" }
+        );
+      }
+    } catch {
+      // best-effort
+    }
+  }, []);
+
+  // Watchdog: if GPS hasn't produced a fix within 3s, try IP geo
+  useEffect(() => {
+    if (weatherLoc) return;
+    const t = setTimeout(() => { tryIpFallback(); }, 3000);
+    return () => clearTimeout(t);
+  }, [weatherLoc, tryIpFallback]);
+
+  // Fetch weather whenever the location source changes (throttled — first call always fires)
+  useEffect(() => {
+    if (!weatherLoc) return;
+    maybeRefreshWeather(weatherLoc.lat, weatherLoc.lng);
+  }, [weatherLoc, maybeRefreshWeather]);
+
   // --- geolocation handler -----------------------------------------------
   const handlePosition = useCallback(
     (pos: GeolocationPosition) => {
       const t = Date.now();
       const { latitude: lat, longitude: lng, speed, altitude, heading, accuracy } = pos.coords;
 
+      // GPS is the highest-priority weather location source — override IP if we now have a fix
+      if (!weatherLocRef.current || weatherLocRef.current.source === "ip") {
+        setWeatherLoc({ lat, lng, source: "gps" });
+      }
       // Always refresh weather for the latest fix, but throttled
       maybeRefreshWeather(lat, lng, heading ?? undefined);
 
@@ -301,14 +405,55 @@ export default function LiveRide() {
     if (!geoSupported) return;
     const id = navigator.geolocation.watchPosition(
       handlePosition,
-      (err) => setError(err.message),
+      (err) => {
+        setError(err.message);
+        // Geo denied/failed — fall back to IP geo right away so weather still loads
+        tryIpFallback();
+      },
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
     );
     watchIdRef.current = id;
     return () => {
       if (watchIdRef.current != null) navigator.geolocation.clearWatch(watchIdRef.current);
     };
-  }, [handlePosition, geoSupported]);
+  }, [handlePosition, geoSupported, tryIpFallback]);
+
+  // --- geocode search (debounced) ----------------------------------------
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const handleQueryChange = (value: string) => {
+    setQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (value.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    debounceRef.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await fetch(`/api/geocode?q=${encodeURIComponent(value)}`);
+        const json = await res.json();
+        setSuggestions(json.results ?? []);
+        setShowSuggestions(true);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+  };
+
+  const selectLocation = (result: GeoResult) => {
+    setWeatherLoc({ lat: result.lat, lng: result.lng, name: result.display, source: "search" });
+    setQuery(result.display);
+    setSuggestions([]);
+    setShowSuggestions(false);
+    // Force a fresh fetch even if we just fetched (different location now)
+    lastWeatherFetchRef.current = null;
+  };
 
   // --- controls -----------------------------------------------------------
   const start = () => {
@@ -331,7 +476,19 @@ export default function LiveRide() {
     setLaps([]);
     setPhotoCount(0);
     startedAtRef.current = Date.now();
+    endedAtRef.current = null;
     lastMoveTRef.current = Date.now();
+    // Re-arm the GPS watch if a previous end() released it
+    if (watchIdRef.current == null && geoSupported) {
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        handlePosition,
+        (err) => {
+          setError(err.message);
+          tryIpFallback();
+        },
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 }
+      );
+    }
     setState("recording");
   };
 
@@ -341,15 +498,29 @@ export default function LiveRide() {
     setState("recording");
   };
 
+  const stopWatch = () => {
+    if (watchIdRef.current != null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+  };
+
   const end = () => {
+    const endedAt = Date.now();
+    endedAtRef.current = endedAt;
+
     if (!startedAtRef.current || pointsRef.current.length < 2) {
-      // Nothing to save
+      // Nothing worth saving — go back to idle but keep the GPS watch alive
+      // and preserve the preview point so Start re-enables for another try.
+      startedAtRef.current = null;
+      endedAtRef.current = null;
       setState("idle");
-      setPoints([]);
+      setPoints((prev) => (prev.length > 0 ? [prev[prev.length - 1]] : []));
       return;
     }
+    // Successful save — release GPS so the device stops tracking once the activity is over
+    stopWatch();
     const startedAt = startedAtRef.current;
-    const endedAt = Date.now();
     const totalTimeSec = (endedAt - startedAt) / 1000;
     const distMi = totalDistMRef.current * M_TO_MI;
     const avgMph = movingTimeRef.current > 0 ? (totalDistMRef.current / movingTimeRef.current) * MS_TO_MPH : 0;
@@ -357,6 +528,7 @@ export default function LiveRide() {
       id: `ride_${startedAt}`,
       startedAt,
       endedAt,
+      sport,
       points: pointsRef.current,
       laps: lapsRef.current,
       totalDistMi: distMi,
@@ -380,6 +552,8 @@ export default function LiveRide() {
     descentRef.current = 0;
     maxSpeedRef.current = 0;
     lapsRef.current = [];
+    startedAtRef.current = null;
+    endedAtRef.current = null;
     setTotalDistM(0); setMovingTimeS(0); setAscentFt(0); setDescentFt(0); setMaxSpeedMs(0); setLaps([]);
   };
 
@@ -387,8 +561,9 @@ export default function LiveRide() {
   const current = points[points.length - 1];
   const currentSpeedMph = current?.speedMs != null ? current.speedMs * MS_TO_MPH : 0;
   const distMi = totalDistM * M_TO_MI;
+  const elapsedRefNow = state === "ended" && endedAtRef.current ? endedAtRef.current : now;
   const totalElapsedSec = startedAtRef.current
-    ? (now - startedAtRef.current) / 1000
+    ? (elapsedRefNow - startedAtRef.current) / 1000
     : 0;
   const avgMph = movingTimeS > 0 ? (totalDistM / movingTimeS) * MS_TO_MPH : 0;
   const altFt = current?.altM != null ? current.altM * M_TO_FT : null;
@@ -465,11 +640,80 @@ export default function LiveRide() {
         onChange={(e) => handlePhotoFiles(e.target.files)}
       />
 
-      {error && (
+      {/* Sport picker — locked in once recording starts so mid-activity stats stay consistent */}
+      <div className="mb-3 flex items-center gap-2">
+        <span className="text-[10px] uppercase tracking-widest text-gray-500">Activity</span>
+        <div className="inline-flex rounded-lg border border-gray-800 bg-gray-900 p-0.5 text-xs">
+          {SPORTS.map((s) => {
+            const active = sport === s.id;
+            const locked = state !== "idle";
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => !locked && setSport(s.id)}
+                disabled={locked && !active}
+                className={`px-3 py-1.5 rounded-md transition-colors ${
+                  active ? "bg-sky-500 text-white"
+                  : locked ? "text-gray-700 cursor-not-allowed"
+                  : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                <span className="mr-1">{s.emoji}</span>{s.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {error && !weatherLoc && (
         <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-red-400 text-sm">
           {error}
         </div>
       )}
+      {error && weatherLoc && weatherLoc.source !== "gps" && (
+        <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-300 text-sm">
+          GPS unavailable — showing weather for <span className="font-semibold">{weatherLoc.name ?? "your approximate location"}</span>.
+          Enable location to record distance, speed, and route.
+        </div>
+      )}
+
+      {/* Weather location picker — visible whenever weather is showing */}
+      <div ref={searchRef} className="relative mb-3">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => handleQueryChange(e.target.value)}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+            placeholder={weatherLoc?.name ? `Weather for ${weatherLoc.name} — search to change…` : "Search a city for weather…"}
+            className="w-full rounded-lg bg-gray-900 border border-gray-800 pl-3 pr-9 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
+          />
+          {searchLoading && (
+            <div className="absolute right-3 top-2.5 h-4 w-4 animate-spin rounded-full border-2 border-gray-700 border-t-sky-400" />
+          )}
+        </div>
+        {showSuggestions && suggestions.length > 0 && (
+          <ul className="absolute top-full left-0 right-0 z-50 mt-1 rounded-lg border border-gray-700 bg-gray-900 shadow-xl overflow-hidden">
+            {suggestions.map((r, i) => (
+              <li key={i}>
+                <button
+                  type="button"
+                  onMouseDown={() => selectLocation(r)}
+                  className="w-full px-3 py-2 text-left text-sm text-gray-200 hover:bg-gray-800 transition-colors"
+                >
+                  <span className="font-medium">{r.name}</span>
+                  {r.display !== r.name && (
+                    <span className="ml-1.5 text-gray-500 text-xs">
+                      {r.display.replace(r.name + ", ", "")}
+                    </span>
+                  )}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       {!geoSupported && (
         <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-400 text-sm">
@@ -709,6 +953,37 @@ export default function LiveRide() {
                 </div>
               )}
 
+              <div className="flex items-center justify-end gap-2">
+                <span className="text-xs text-gray-500">Avatar:</span>
+                <div className="inline-flex rounded-lg border border-gray-800 bg-gray-900 p-0.5 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => updateGender("male")}
+                    className={`px-3 py-1 rounded-md transition-colors ${
+                      gender === "male" ? "bg-sky-500 text-white" : "text-gray-400 hover:text-gray-200"
+                    }`}
+                  >
+                    Male
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => updateGender("female")}
+                    className={`px-3 py-1 rounded-md transition-colors ${
+                      gender === "female" ? "bg-sky-500 text-white" : "text-gray-400 hover:text-gray-200"
+                    }`}
+                  >
+                    Female
+                  </button>
+                </div>
+              </div>
+              <WeatherAvatar
+                tempF={weather.tempF}
+                precipProb={weather.precipProb}
+                windSpeedMph={weather.windSpeedMph}
+                gender={gender}
+                sport={sport}
+              />
+
               <div className="text-right text-[10px] text-gray-600">
                 Updated {Math.round((Date.now() - weather.fetchedAt) / 1000)}s ago
                 {weatherLoading && " · refreshing…"}
@@ -731,7 +1006,7 @@ export default function LiveRide() {
               disabled={!current}
               className="btn-primary flex-1 py-4 text-base font-bold disabled:opacity-50"
             >
-              {current ? "▶ Start Ride" : "Waiting for GPS…"}
+              {current ? `▶ Start ${sportMeta.verb}` : "Waiting for GPS…"}
             </button>
             <label className="flex items-center gap-1.5 text-xs text-gray-400 px-2">
               <input
@@ -758,8 +1033,8 @@ export default function LiveRide() {
         )}
         {state === "ended" && (
           <>
-            <Link href="/ride/history" className="btn-primary flex-1 py-4 text-base font-bold text-center">View Ride</Link>
-            <button onClick={discardAndReset} className="btn-secondary flex-1 py-4 text-base font-bold">New Ride</button>
+            <Link href="/ride/history" className="btn-primary flex-1 py-4 text-base font-bold text-center">View {sportMeta.verb}</Link>
+            <button onClick={discardAndReset} className="btn-secondary flex-1 py-4 text-base font-bold">New {sportMeta.verb}</button>
           </>
         )}
       </div>
