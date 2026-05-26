@@ -7,10 +7,13 @@ import { deletePhotosForRide } from "@/lib/photos/photoStore";
 const KEY = "rbw_rides_v1";
 const MAX_RIDES = 30;
 
+export type RideSport = "cycling" | "running" | "walking";
+
 export interface RideRecord {
   id: string;
   startedAt: number;
   endedAt: number;
+  sport?: RideSport;
   points: TrackPoint[];
   laps: Array<{ t: number; distMi: number }>;
   totalDistMi: number;
