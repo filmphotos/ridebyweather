@@ -9,6 +9,17 @@ const MAX_RIDES = 30;
 
 export type RideSport = "cycling" | "running" | "walking";
 
+export type RideStopType = "food" | "bathroom" | "other";
+
+export interface RideStop {
+  id: string;          // stop_<t>
+  t: number;           // unix ms — when the stop was logged
+  lat: number;
+  lng: number;
+  type: RideStopType;
+  note?: string;
+}
+
 export interface RideRecord {
   id: string;
   startedAt: number;
@@ -16,6 +27,7 @@ export interface RideRecord {
   sport?: RideSport;
   points: TrackPoint[];
   laps: Array<{ t: number; distMi: number }>;
+  stops?: RideStop[];
   totalDistMi: number;
   movingTimeSec: number;
   totalTimeSec: number;
@@ -74,11 +86,32 @@ export function rideToGpx(ride: RideRecord): string {
       return `<trkpt lat="${p.lat}" lon="${p.lng}">${ele}<time>${time}</time></trkpt>`;
     })
     .join("");
+  // GPX waypoints for stops — most tools (Strava, Garmin Connect) will show them
+  const wpts = (ride.stops ?? [])
+    .map((s) => {
+      const time = new Date(s.t).toISOString();
+      const label = s.type === "food" ? "Food stop"
+        : s.type === "bathroom" ? "Bathroom stop"
+        : "Stop";
+      const desc = s.note ? `<desc>${escapeXml(s.note)}</desc>` : "";
+      return `<wpt lat="${s.lat}" lon="${s.lng}"><time>${time}</time><name>${label}</name><type>${s.type}</type>${desc}</wpt>`;
+    })
+    .join("");
   return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="RideByWeather" xmlns="http://www.topografix.com/GPX/1/1">
   <metadata><name>${name}</name><time>${new Date(ride.startedAt).toISOString()}</time></metadata>
+  ${wpts}
   <trk><name>${name}</name><trkseg>${trkpts}</trkseg></trk>
 </gpx>`;
+}
+
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
 export function downloadGpx(ride: RideRecord) {

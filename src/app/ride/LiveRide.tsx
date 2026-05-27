@@ -17,7 +17,7 @@ import {
   type TrackPoint,
   type WindRelative,
 } from "@/lib/ride/rideMath";
-import { saveRide, type RideRecord, type RideSport } from "@/lib/ride/rideStorage";
+import { saveRide, type RideRecord, type RideSport, type RideStop, type RideStopType } from "@/lib/ride/rideStorage";
 import { addPhoto, requestPersistence } from "@/lib/photos/photoStore";
 import type { GeoResult } from "@/app/api/geocode/route";
 import WeatherAvatar from "@/components/WeatherAvatar/WeatherAvatar";
@@ -99,6 +99,8 @@ export default function LiveRide() {
   const [tab, setTab] = useState<Tab>("stats");
   const [points, setPoints] = useState<TrackPoint[]>([]);
   const [laps, setLaps] = useState<Array<{ t: number; distMi: number }>>([]);
+  const [stops, setStops] = useState<RideStop[]>([]);
+  const [showStopMenu, setShowStopMenu] = useState(false);
   const [autoPause, setAutoPause] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [geoSupported] = useState(typeof navigator !== "undefined" && !!navigator.geolocation);
@@ -399,6 +401,24 @@ export default function LiveRide() {
   const descentRef = useRef(0);
   const maxSpeedRef = useRef(0);
   const lapsRef = useRef<Array<{ t: number; distMi: number }>>([]);
+  const stopsRef = useRef<RideStop[]>([]);
+
+  const markStop = useCallback((type: RideStopType) => {
+    const last = pointsRef.current[pointsRef.current.length - 1];
+    if (!last) return;
+    const t = Date.now();
+    const stop: RideStop = {
+      id: `stop_${t}`,
+      t,
+      lat: last.lat,
+      lng: last.lng,
+      type,
+    };
+    const next = [...stopsRef.current, stop];
+    stopsRef.current = next;
+    setStops(next);
+    setShowStopMenu(false);
+  }, []);
 
   // --- start watching position ASAP for a "ready" feel -------------------
   useEffect(() => {
@@ -468,12 +488,14 @@ export default function LiveRide() {
     descentRef.current = 0;
     maxSpeedRef.current = 0;
     lapsRef.current = [];
+    stopsRef.current = [];
     setTotalDistM(0);
     setMovingTimeS(0);
     setAscentFt(0);
     setDescentFt(0);
     setMaxSpeedMs(0);
     setLaps([]);
+    setStops([]);
     setPhotoCount(0);
     startedAtRef.current = Date.now();
     endedAtRef.current = null;
@@ -531,6 +553,7 @@ export default function LiveRide() {
       sport,
       points: pointsRef.current,
       laps: lapsRef.current,
+      stops: stopsRef.current,
       totalDistMi: distMi,
       movingTimeSec: movingTimeRef.current,
       totalTimeSec,
@@ -552,9 +575,10 @@ export default function LiveRide() {
     descentRef.current = 0;
     maxSpeedRef.current = 0;
     lapsRef.current = [];
+    stopsRef.current = [];
     startedAtRef.current = null;
     endedAtRef.current = null;
-    setTotalDistM(0); setMovingTimeS(0); setAscentFt(0); setDescentFt(0); setMaxSpeedMs(0); setLaps([]);
+    setTotalDistM(0); setMovingTimeS(0); setAscentFt(0); setDescentFt(0); setMaxSpeedMs(0); setLaps([]); setStops([]);
   };
 
   // --- derived values for display ----------------------------------------
@@ -592,6 +616,21 @@ export default function LiveRide() {
     return null;
   }, [forecast]);
 
+  // Heat stroke warning — NWS heat-index categories applied to "feels like" temp.
+  // ≥125°F = Extreme Danger (heat stroke imminent), ≥103°F = Danger (heat stroke
+  // possible with physical activity — which is exactly what the user is doing).
+  const heatAlert = useMemo(() => {
+    if (!weather) return null;
+    const feels = weather.feelsLikeF;
+    if (feels >= 125) {
+      return { level: "extreme" as const, feels, label: "EXTREME HEAT — STOP NOW" };
+    }
+    if (feels >= 103) {
+      return { level: "danger" as const, feels, label: "HEAT STROKE WARNING" };
+    }
+    return null;
+  }, [weather]);
+
   // --- render -------------------------------------------------------------
   return (
     <div className="mx-auto max-w-5xl px-3 py-4 sm:px-6 sm:py-6 lg:px-8">
@@ -603,6 +642,47 @@ export default function LiveRide() {
           <Link href="/ride/history" className="text-gray-500 hover:text-sky-400">History</Link>
         </div>
         <div className="flex items-center gap-3 text-gray-500">
+          {state !== "idle" && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowStopMenu((v) => !v)}
+                className="inline-flex items-center gap-1 rounded-md border border-gray-700 bg-gray-800 hover:bg-gray-700 px-2 py-1 text-gray-300"
+                aria-label="Mark a stop on this ride"
+                aria-expanded={showStopMenu}
+              >
+                <span>📍</span>
+                <span className="text-[11px]">
+                  {stops.length > 0 ? `Stop (${stops.length})` : "Mark Stop"}
+                </span>
+              </button>
+              {showStopMenu && (
+                <div className="absolute right-0 top-full mt-1 z-50 rounded-lg border border-gray-700 bg-gray-900 shadow-xl overflow-hidden text-xs min-w-[140px]">
+                  <button
+                    type="button"
+                    onClick={() => markStop("food")}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-200 hover:bg-gray-800"
+                  >
+                    <span>🍔</span> Food
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => markStop("bathroom")}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-200 hover:bg-gray-800 border-t border-gray-800"
+                  >
+                    <span>🚻</span> Bathroom
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => markStop("other")}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-200 hover:bg-gray-800 border-t border-gray-800"
+                  >
+                    <span>📍</span> Other stop
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           {state !== "idle" && (
             <button
               type="button"
@@ -718,6 +798,25 @@ export default function LiveRide() {
       {!geoSupported && (
         <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-amber-400 text-sm">
           Your browser doesn&apos;t expose location. Try Chrome / Safari on mobile.
+        </div>
+      )}
+
+      {heatAlert && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="animate-heat-flash mb-3 rounded-xl border-2 p-3 text-white text-sm font-bold flex items-start gap-2"
+        >
+          <span className="text-lg leading-none">🥵</span>
+          <div className="flex-1">
+            <div className="uppercase tracking-wider">{heatAlert.label}</div>
+            <div className="text-xs font-normal text-red-50 mt-0.5">
+              Feels like {Math.round(heatAlert.feels)}°F.{" "}
+              {heatAlert.level === "extreme"
+                ? "End your activity, get to shade and hydrate immediately."
+                : "Slow down, hydrate, find shade. Heat stroke risk during exertion."}
+            </div>
+          </div>
         </div>
       )}
 

@@ -21,3 +21,28 @@
     @apply inline-flex items-center justify-center rounded-xl bg-gray-800 px-6 py-3 font-semibold text-gray-200 hover:bg-gray-700 transition-colors;
   }
 }
+
+@keyframes heat-flash {
+  0%, 100% {
+    background-color: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+  50% {
+    background-color: rgba(220, 38, 38, 0.45);
+    border-color: rgba(248, 113, 113, 1);
+    box-shadow: 0 0 18px 2px rgba(239, 68, 68, 0.55);
+  }
+}
+
+.animate-heat-flash {
+  animation: heat-flash 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-heat-flash {
+    animation: none;
+    background-color: rgba(220, 38, 38, 0.3);
+    border-color: rgba(248, 113, 113, 0.8);
+  }
+}

@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { deleteRide, downloadGpx, loadRides, type RideRecord } from "@/lib/ride/rideStorage";
 import { fmtDuration } from "@/lib/ride/rideMath";
 import RidePhotos from "@/components/RidePhotos/RidePhotos";
+
+const RideRouteMap = dynamic(() => import("./RideRouteMap"), { ssr: false });
 
 export default function RideHistory() {
   const [rides, setRides] = useState<RideRecord[]>([]);
@@ -111,6 +114,37 @@ export default function RideHistory() {
               <Stat label="Total Time" value={fmtDuration(selected.totalTimeSec)} />
               <Stat label="Stops" value={fmtDuration(selected.totalTimeSec - selected.movingTimeSec)} />
             </div>
+
+            {selected.points.length >= 2 && (
+              <div className="mt-5">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-[10px] uppercase tracking-widest text-gray-500">Route</div>
+                  {selected.stops && selected.stops.length > 0 && (
+                    <div className="text-[10px] uppercase tracking-widest text-gray-500">
+                      {selected.stops.length} stop{selected.stops.length === 1 ? "" : "s"}
+                    </div>
+                  )}
+                </div>
+                <RideRouteMap points={selected.points} stops={selected.stops} />
+                {selected.stops && selected.stops.length > 0 && (
+                  <ul className="mt-3 space-y-1.5">
+                    {selected.stops.map((s) => {
+                      const emoji = s.type === "food" ? "🍔" : s.type === "bathroom" ? "🚻" : "📍";
+                      const label = s.type === "food" ? "Food" : s.type === "bathroom" ? "Bathroom" : "Stop";
+                      const when = new Date(s.t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+                      return (
+                        <li key={s.id} className="flex items-center gap-2 text-xs text-gray-300">
+                          <span className="text-base leading-none">{emoji}</span>
+                          <span className="font-medium text-white">{label}</span>
+                          <span className="text-gray-500">· {when}</span>
+                          {s.note && <span className="text-gray-500">· {s.note}</span>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
 
             <div className="mt-5 flex flex-wrap gap-2">
               <button
