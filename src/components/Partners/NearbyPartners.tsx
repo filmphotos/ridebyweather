@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fetchPartners } from "@/lib/partnersClient";
 
 interface Partner {
   id: string;
@@ -28,6 +29,8 @@ const TYPE_LABELS: Record<string, string> = {
   hospital: "Hospital",
   urgent_care: "Urgent Care",
   clinic: "Clinic",
+  restaurant: "Restaurant",
+  cafe: "Cafe",
 };
 
 const TYPE_ICONS: Record<string, React.ReactNode> = {
@@ -63,6 +66,16 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 21s-7-4.5-7-10a4 4 0 017-2.6A4 4 0 0119 11c0 5.5-7 10-7 10z" />
     </svg>
   ),
+  restaurant: (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M7 3v8a2 2 0 002 2v8M11 3v8a2 2 0 01-2 2M15 3c-1.5 1-2.5 3-2.5 6 0 2 1 3 2.5 3v9" />
+    </svg>
+  ),
+  cafe: (
+    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 8h11v6a4 4 0 01-4 4H8a4 4 0 01-4-4V8zM15 9h2a3 3 0 010 6h-2M6 2v3M9 2v3M12 2v3" />
+    </svg>
+  ),
 };
 
 function PartnerRow({ p }: { p: Partner }) {
@@ -71,6 +84,8 @@ function PartnerRow({ p }: { p: Partner }) {
       <div className={`flex-shrink-0 mt-0.5 rounded-lg p-2 ${
         p.type === "hospital" || p.type === "urgent_care" || p.type === "clinic"
           ? "bg-rose-500/20 text-rose-400"
+          : p.type === "restaurant" || p.type === "cafe"
+          ? "bg-amber-500/20 text-amber-400"
           : p.tier === "enterprise" ? "bg-sky-500/20 text-sky-400"
           : p.tier === "pro" ? "bg-indigo-500/20 text-indigo-400"
           : "bg-gray-700 text-gray-400"
@@ -120,18 +135,21 @@ function PartnerRow({ p }: { p: Partner }) {
 export default function NearbyPartners({ lat, lng, sport = "cycling" }: Props) {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [medical, setMedical] = useState<Partner[]>([]);
+  const [restaurants, setRestaurants] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/partners?lat=${lat}&lng=${lng}&sport=${sport}&radius=25`)
-      .then((r) => r.json())
+    const ctrl = new AbortController();
+    fetchPartners({ lat, lng, sport, radiusMi: 25, signal: ctrl.signal })
       .then((d) => {
-        setPartners(d.partners ?? []);
-        setMedical(d.medical ?? []);
+        setPartners((d.partners ?? []) as Partner[]);
+        setMedical((d.medical ?? []) as Partner[]);
+        setRestaurants((d.restaurants ?? []) as Partner[]);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    return () => ctrl.abort();
   }, [lat, lng, sport]);
 
   if (loading) {
@@ -187,6 +205,18 @@ export default function NearbyPartners({ lat, lng, sport = "cycling" }: Props) {
         </div>
       ) : (
         <p className="text-xs text-gray-500">No hospitals or urgent care found within 25 mi.</p>
+      )}
+
+      <div className="flex items-center justify-between mb-3 mt-5 pt-4 border-t border-gray-800">
+        <h3 className="font-semibold text-white">Nearby Restaurants</h3>
+        <span className="text-xs text-gray-500">restaurants & cafes</span>
+      </div>
+      {restaurants.length > 0 ? (
+        <div className="space-y-2">
+          {restaurants.map((r) => <PartnerRow key={r.id} p={r} />)}
+        </div>
+      ) : (
+        <p className="text-xs text-gray-500">No restaurants or cafes found within 25 mi.</p>
       )}
     </div>
   );

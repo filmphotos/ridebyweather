@@ -1,4 +1,5 @@
-const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+// kumi.systems mirror — overpass-api.de routinely 504s on these queries.
+const OVERPASS_URL = "https://overpass.kumi.systems/api/interpreter";
 
 export interface OsmPartner {
   id: string;

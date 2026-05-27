@@ -1,57 +1,57 @@
 import { racedOverpass, gridSnap } from "./overpass";
 
-export type MedicalType = "hospital" | "urgent_care" | "clinic";
+export type RestaurantType = "restaurant" | "cafe";
 
-export interface OsmMedical {
+export interface OsmRestaurant {
   id: string;
   name: string;
-  type: MedicalType;
+  type: RestaurantType;
   lat: number;
   lng: number;
   address: string | null;
   phone: string | null;
   website: string | null;
-  description: null;
+  description: string | null;
   isVerified: false;
   tier: "free";
   source: "osm";
 }
 
-function classify(tags: Record<string, string>): MedicalType | null {
-  if (tags.amenity === "hospital") return "hospital";
-  if (tags.healthcare === "hospital") return "hospital";
-  if (tags.healthcare === "urgent_care") return "urgent_care";
-  if (tags.amenity === "clinic" || tags.healthcare === "clinic") return "clinic";
+function classify(tags: Record<string, string>): RestaurantType | null {
+  if (tags.amenity === "restaurant") return "restaurant";
+  if (tags.amenity === "cafe") return "cafe";
   return null;
 }
 
-export async function fetchOsmMedical(
+export async function fetchOsmRestaurants(
   lat: number,
   lng: number,
   radiusMi: number
-): Promise<OsmMedical[]> {
-  // 10 mi cap — hospitals matter even when farther, but 25 mi consistently
-  // blew past Overpass's response-size and timeout limits in dense areas.
-  const effectiveRadiusMi = Math.min(radiusMi, 10);
+): Promise<OsmRestaurant[]> {
+  // 3 mi cap is the only radius that consistently completes in <2 s across
+  // every density. A cyclist's coffee/lunch stop sits within 3 mi anyway.
+  const effectiveRadiusMi = Math.min(radiusMi, 3);
   const radiusM = Math.round(effectiveRadiusMi * 1609.34);
   const { gridLat, gridLng } = gridSnap(lat, lng);
   const around = `around:${radiusM},${gridLat},${gridLng}`;
-  // Use `nwr` to match nodes, ways, and relations in one selector. Combined
-  // regex selectors + name filter cut the query from 10 sub-queries to 2.
+  // Single regex selector + name filter + node-only + 100-element cap keeps
+  // the response under 50 KB. We only render the 10 closest.
   const query =
     `[out:json][timeout:20];` +
     `(` +
-      `nwr["amenity"~"^(hospital|clinic)$"]["name"](${around});` +
-      `nwr["healthcare"~"^(hospital|urgent_care|clinic)$"]["name"](${around});` +
+      `node["amenity"~"^(restaurant|cafe)$"]["name"](${around});` +
     `);` +
-    `out tags center 60;`;
+    `out tags center 100;`;
 
-  const cacheKey = `medical:${gridLat.toFixed(2)}:${gridLng.toFixed(2)}:${effectiveRadiusMi}`;
-  const data = await racedOverpass({ query, label: "osmMedical", cacheKey });
+  // Grid-snapped cache key so the cycling dashboard's parallel /api/partners
+  // hits (demo location cards + the user's actual location) all share a
+  // single Overpass race instead of stampeding the public mirrors.
+  const cacheKey = `restaurants:${gridLat.toFixed(2)}:${gridLng.toFixed(2)}:${effectiveRadiusMi}`;
+  const data = await racedOverpass({ query, label: "osmRestaurants", cacheKey });
   if (!data) return [];
 
   const seen = new Set<string>();
-  const out: OsmMedical[] = [];
+  const out: OsmRestaurant[] = [];
   for (const e of data.elements ?? []) {
     const tags = e.tags ?? {};
     if (!tags.name) continue;
@@ -77,7 +77,7 @@ export async function fetchOsmMedical(
       address,
       phone: tags.phone ?? null,
       website: tags.website ?? null,
-      description: null,
+      description: tags.cuisine ?? null,
       isVerified: false,
       tier: "free",
       source: "osm",

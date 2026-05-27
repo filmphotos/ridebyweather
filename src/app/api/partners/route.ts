@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { fetchOsmBikeShops } from "@/lib/osmPartners";
-import { fetchMapboxBikeShops } from "@/lib/mapboxSearch";
+import {
+  fetchMapboxBikeShops,
+  fetchMapboxRestaurants,
+  fetchMapboxMedical,
+} from "@/lib/mapboxSearch";
 import { fetchFoursquareBikeShops } from "@/lib/foursquarePlaces";
 import { fetchYelpBikeShops } from "@/lib/yelpSearch";
 import { fetchOsmMedical } from "@/lib/osmMedical";
+import { fetchOsmRestaurants } from "@/lib/osmRestaurants";
+import { fetchOsmBathrooms } from "@/lib/osmBathrooms";
 import { verifyToken } from "@/lib/auth";
 
 // Always run fresh — don't serve a stale cached payload that might still
@@ -14,6 +20,8 @@ export const revalidate = 0;
 
 const SHOP_LIMIT = 10;
 const MEDICAL_LIMIT = 5;
+const RESTAURANT_LIMIT = 10;
+const BATHROOM_LIMIT = 25;
 
 function haversineMi(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8;
@@ -43,7 +51,7 @@ export async function GET(req: NextRequest) {
   const latDelta = radiusMi / 69;
   const lngDelta = radiusMi / (69 * Math.cos((lat * Math.PI) / 180));
 
-  const [dbCandidates, yelpC, fsqC, mapboxC, osmC, medicalC] = await Promise.all([
+  const [dbCandidates, yelpC, fsqC, mapboxC, osmC, medicalC, restaurantC, bathroomC, mapboxRestaurantC, mapboxMedicalC] = await Promise.all([
     db.partnerListing.findMany({
       where: {
         lat: { gte: lat - latDelta, lte: lat + latDelta },
@@ -56,6 +64,14 @@ export async function GET(req: NextRequest) {
     fetchMapboxBikeShops(lat, lng, radiusMi),
     fetchOsmBikeShops(lat, lng, radiusMi),
     fetchOsmMedical(lat, lng, radiusMi),
+    fetchOsmRestaurants(lat, lng, radiusMi),
+    fetchOsmBathrooms(lat, lng, radiusMi),
+    // Mapbox runs in parallel with OSM Overpass and serves as a fallback when
+    // the public Overpass mirrors are overloaded (common in dense urban areas).
+    // No Mapbox fallback for bathrooms — their Search Box API has no toilet
+    // category, so the bathroom layer is OSM-only.
+    fetchMapboxRestaurants(lat, lng, Math.min(radiusMi, 5)),
+    fetchMapboxMedical(lat, lng, Math.min(radiusMi, 10)),
   ]);
 
   const dbPartners = dbCandidates.map((p) => ({
@@ -125,7 +141,17 @@ export async function GET(req: NextRequest) {
     })
     .slice(0, SHOP_LIMIT);
 
-  const medical = medicalC
+  // Merge OSM + Mapbox medical: OSM first (richer tagging), Mapbox fills
+  // gaps when Overpass is down. Belt-and-suspenders against missing medical
+  // results, which matter most when you actually need one.
+  const seenMed = new Set<string>();
+  const medical = [...medicalC, ...mapboxMedicalC]
+    .filter((m) => {
+      const k = m.name.toLowerCase().trim();
+      if (seenMed.has(k)) return false;
+      seenMed.add(k);
+      return true;
+    })
     .map((m) => ({ ...m, distanceMi: haversineMi(lat, lng, m.lat, m.lng) }))
     .filter((m) => m.distanceMi <= radiusMi)
     .sort((a, b) => {
@@ -136,5 +162,30 @@ export async function GET(req: NextRequest) {
     })
     .slice(0, MEDICAL_LIMIT);
 
-  return NextResponse.json({ partners: results, medical });
+  // Merge OSM + Mapbox restaurants: OSM first (richer cuisine tags), then
+  // Mapbox to fill gaps when Overpass returns nothing. Dedup by lowercased
+  // name so we don't double-list the same diner.
+  const seenRest = new Set<string>();
+  const restaurants = [...restaurantC, ...mapboxRestaurantC]
+    .filter((r) => {
+      const k = r.name.toLowerCase().trim();
+      if (seenRest.has(k)) return false;
+      seenRest.add(k);
+      return true;
+    })
+    .map((r) => ({ ...r, distanceMi: haversineMi(lat, lng, r.lat, r.lng) }))
+    .filter((r) => r.distanceMi <= radiusMi)
+    .sort((a, b) => a.distanceMi - b.distanceMi)
+    .slice(0, RESTAURANT_LIMIT);
+
+  // OSM-only — Mapbox Search Box has no toilet category. The shared in-flight
+  // cache in racedOverpass + the client-side dedup in partnersClient handle
+  // reliability so Overpass mirror throttling doesn't empty the layer.
+  const bathrooms = bathroomC
+    .map((b) => ({ ...b, distanceMi: haversineMi(lat, lng, b.lat, b.lng) }))
+    .filter((b) => b.distanceMi <= radiusMi)
+    .sort((a, b) => a.distanceMi - b.distanceMi)
+    .slice(0, BATHROOM_LIMIT);
+
+  return NextResponse.json({ partners: results, medical, restaurants, bathrooms });
 }

@@ -6,13 +6,25 @@ import type { MapMouseEvent } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import StravaImport from "@/components/Strava/StravaImport";
 import ElevationProfile from "@/components/RouteMap/ElevationProfile";
+import { fetchPartners } from "@/lib/partnersClient";
+
+type Sport = "cycling" | "running" | "walking";
 
 interface Props {
   lat: number;
   lng: number;
   windDirDeg: number;
   windSpeedMph: number;
+  sport?: Sport;
 }
+
+// Mapbox Directions has no "running" profile — running routes use the same
+// pedestrian network as walking (sidewalks, footpaths, parks).
+const MAPBOX_PROFILE: Record<Sport, "cycling" | "walking"> = {
+  cycling: "cycling",
+  running: "walking",
+  walking: "walking",
+};
 
 type WindType = "tailwind" | "headwind" | "crosswind";
 
@@ -32,6 +44,56 @@ interface SavedRoute {
   segments: string;
   createdAt: string;
 }
+
+interface Restaurant {
+  id: string;
+  name: string;
+  type: "restaurant" | "cafe";
+  lat: number;
+  lng: number;
+  distanceMi: number;
+}
+
+type CleanTier = "likely_clean" | "basic" | "caution" | "unrated";
+
+interface Bathroom {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  distanceMi: number;
+  fee: boolean | null;
+  wheelchair: boolean | null;
+  indoor: boolean;
+  supervised: boolean | null;
+  drinkingWater: boolean | null;
+  changingTable: boolean | null;
+  openingHours: string | null;
+  operator: string | null;
+  cleanTier: CleanTier;
+  cleanReasons: string[];
+}
+
+const CLEAN_TIER_LABEL: Record<CleanTier, string> = {
+  likely_clean: "Likely clean",
+  basic: "Basic",
+  caution: "Use caution",
+  unrated: "Unrated",
+};
+
+const CLEAN_TIER_COLOR: Record<CleanTier, string> = {
+  likely_clean: "bg-emerald-600",
+  basic: "bg-sky-600",
+  caution: "bg-rose-600",
+  unrated: "bg-gray-600",
+};
+
+const CLEAN_TIER_TEXT: Record<CleanTier, string> = {
+  likely_clean: "text-emerald-400",
+  basic: "text-sky-400",
+  caution: "text-rose-400",
+  unrated: "text-gray-400",
+};
 
 const WIND_COLORS: Record<WindType, string> = {
   tailwind: "#22c55e",
@@ -73,7 +135,7 @@ function distanceMi(wps: [number, number][]): number {
   return total;
 }
 
-export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) {
+export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph, sport = "cycling" }: Props) {
   const [waypoints, setWaypoints] = useState<[number, number][]>([]);
   const [snappedCoords, setSnappedCoords] = useState<[number, number][]>([]);
   const [snappedDistanceMi, setSnappedDistanceMi] = useState<number | null>(null);
@@ -95,6 +157,20 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
   const [showStravaImport, setShowStravaImport] = useState(false);
   const [stravaConnected, setStravaConnected] = useState(false);
 
+  // Restaurants overlay
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [showRestaurants, setShowRestaurants] = useState(true);
+  const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
+
+  // Bathrooms overlay
+  const [bathrooms, setBathrooms] = useState<Bathroom[]>([]);
+  const [showBathrooms, setShowBathrooms] = useState(true);
+  const [selectedBathroom, setSelectedBathroom] = useState<Bathroom | null>(null);
+
+  // Surface map-init failures (bad token, style fetch error, missing WebGL)
+  // instead of silently rendering a blank container.
+  const [mapError, setMapError] = useState<string | null>(null);
+
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
   useEffect(() => {
@@ -107,6 +183,21 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
       .then((d) => setStravaConnected(!!d.connected))
       .catch(() => {});
   }, []);
+
+  // Pull nearby restaurants + bathrooms via the shared partners client, which
+  // dedupes against <NearbyPartners>'s identical fetch on the same page —
+  // halving the load on Overpass mirrors.
+  useEffect(() => {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const ctrl = new AbortController();
+    fetchPartners({ lat, lng, sport, radiusMi: 25, signal: ctrl.signal })
+      .then((d) => {
+        if (Array.isArray(d.restaurants)) setRestaurants(d.restaurants as Restaurant[]);
+        if (Array.isArray(d.bathrooms)) setBathrooms(d.bathrooms as Bathroom[]);
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+  }, [lat, lng, sport]);
 
   const fetchSavedRoutes = useCallback(async () => {
     setLoadingRoutes(true);
@@ -147,7 +238,7 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
       try {
         const coords = activeWaypoints.map(([lo, la]) => `${lo},${la}`).join(";");
         const url =
-          `https://api.mapbox.com/directions/v5/mapbox/cycling/${coords}` +
+          `https://api.mapbox.com/directions/v5/mapbox/${MAPBOX_PROFILE[sport]}/${coords}` +
           `?geometries=geojson&overview=full&access_token=${encodeURIComponent(token)}`;
         const res = await fetch(url, { signal: ctrl.signal });
         if (!res.ok) throw new Error(`Directions ${res.status}`);
@@ -172,7 +263,7 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
       ctrl.abort();
       clearTimeout(timer);
     };
-  }, [activeWaypoints, token]);
+  }, [activeWaypoints, token, sport]);
 
   // Path used for wind coloring + display: snapped if available, else raw waypoints.
   const pathCoords = useMemo(
@@ -235,7 +326,7 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: routeName.trim(),
-          sport: "cycling",
+          sport,
           waypoints: activeWaypoints,
           segments: segments.map(({ windType, color }) => ({ windType, color })),
           distanceMi: routeDistanceMi,
@@ -301,7 +392,9 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
           <h3 className="font-semibold text-white">Route Wind Planner</h3>
           <p className="text-xs text-gray-500 mt-0.5">
             {waypoints.length === 0
-              ? "Tap the map to add waypoints — route follows roads"
+              ? sport === "cycling"
+                ? "Tap the map to add waypoints — route follows roads"
+                : "Tap the map to add waypoints — route follows sidewalks & paths"
               : routing
                 ? `${waypoints.length} waypoints · routing…`
                 : `${waypoints.length} waypoints · ${routeDistanceMi.toFixed(1)} mi${
@@ -504,6 +597,16 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
           style={{ width: "100%", height: "100%" }}
           mapStyle="mapbox://styles/mapbox/dark-v11"
           onClick={handleMapClick}
+          onLoad={() => setMapError(null)}
+          onError={(e) => {
+            // mapbox-gl ErrorEvent has e.error.message; surface it so a "blank map"
+            // becomes a useful diagnostic instead of dead silence.
+            const msg =
+              (e as unknown as { error?: { message?: string } })?.error?.message ??
+              "Map failed to load";
+            console.error("[RouteMap] Mapbox error:", msg, e);
+            setMapError(msg);
+          }}
           cursor={waypoints.length < 20 ? "crosshair" : "default"}
         >
           <NavigationControl position="bottom-right" />
@@ -542,7 +645,126 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
               }`} />
             </Marker>
           ))}
+
+          {/* Restaurant / café pins */}
+          {showRestaurants && restaurants.map((r) => (
+            <Marker
+              key={r.id}
+              longitude={r.lng}
+              latitude={r.lat}
+              anchor="bottom"
+              onClick={(e) => {
+                // Stop click from also dropping a new waypoint
+                e.originalEvent.stopPropagation();
+                setSelectedRestaurant(r);
+              }}
+            >
+              <div
+                title={`${r.name} — ${r.type === "cafe" ? "Cafe" : "Restaurant"} · ${r.distanceMi.toFixed(1)} mi`}
+                className={`flex h-6 w-6 items-center justify-center rounded-full border-2 border-white shadow-lg cursor-pointer text-[12px] ${
+                  r.type === "cafe" ? "bg-amber-600" : "bg-orange-600"
+                }`}
+              >
+                {r.type === "cafe" ? "☕" : "🍽"}
+              </div>
+            </Marker>
+          ))}
+
+          {selectedRestaurant && (
+            <Marker
+              longitude={selectedRestaurant.lng}
+              latitude={selectedRestaurant.lat}
+              anchor="bottom"
+              offset={[0, -28]}
+            >
+              <div className="rounded-lg border border-amber-500/50 bg-gray-900/95 backdrop-blur-sm px-3 py-2 text-xs shadow-xl min-w-[160px]">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-semibold text-white truncate">{selectedRestaurant.name}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setSelectedRestaurant(null); }}
+                    className="text-gray-500 hover:text-gray-300 text-base leading-none"
+                    aria-label="Close"
+                  >×</button>
+                </div>
+                <p className="text-amber-400 mt-0.5">
+                  {selectedRestaurant.type === "cafe" ? "Cafe" : "Restaurant"} · {selectedRestaurant.distanceMi.toFixed(1)} mi
+                </p>
+              </div>
+            </Marker>
+          )}
+
+          {/* Bathroom pins — color-coded by estimated cleanliness */}
+          {showBathrooms && bathrooms.map((b) => (
+            <Marker
+              key={b.id}
+              longitude={b.lng}
+              latitude={b.lat}
+              anchor="bottom"
+              onClick={(e) => {
+                e.originalEvent.stopPropagation();
+                setSelectedBathroom(b);
+              }}
+            >
+              <div
+                title={`${b.name} — ${CLEAN_TIER_LABEL[b.cleanTier]} (estimated) · ${b.distanceMi.toFixed(1)} mi`}
+                className={`flex h-6 w-6 items-center justify-center rounded-full border-2 border-white shadow-lg cursor-pointer text-[12px] ${CLEAN_TIER_COLOR[b.cleanTier]}`}
+              >
+                🚻
+              </div>
+            </Marker>
+          ))}
+
+          {selectedBathroom && (
+            <Marker
+              longitude={selectedBathroom.lng}
+              latitude={selectedBathroom.lat}
+              anchor="bottom"
+              offset={[0, -28]}
+            >
+              <div className="rounded-lg border border-gray-700 bg-gray-900/95 backdrop-blur-sm px-3 py-2 text-xs shadow-xl min-w-[200px] max-w-[260px]">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-semibold text-white truncate">{selectedBathroom.name}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setSelectedBathroom(null); }}
+                    className="text-gray-500 hover:text-gray-300 text-base leading-none"
+                    aria-label="Close"
+                  >×</button>
+                </div>
+                <div className="mt-1 flex items-center gap-2 flex-wrap">
+                  <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${CLEAN_TIER_COLOR[selectedBathroom.cleanTier]} text-white`}>
+                    {CLEAN_TIER_LABEL[selectedBathroom.cleanTier]}
+                  </span>
+                  <span className="text-gray-500">{selectedBathroom.distanceMi.toFixed(1)} mi</span>
+                </div>
+                {selectedBathroom.cleanReasons.length > 0 && (
+                  <p className={`mt-1 ${CLEAN_TIER_TEXT[selectedBathroom.cleanTier]}`}>
+                    {selectedBathroom.cleanReasons.join(" · ")}
+                  </p>
+                )}
+                {selectedBathroom.openingHours && (
+                  <p className="mt-1 text-gray-400 truncate" title={selectedBathroom.openingHours}>
+                    Hours: {selectedBathroom.openingHours}
+                  </p>
+                )}
+                <p className="mt-1.5 text-[10px] text-gray-600 leading-snug">
+                  Cleanliness estimated from OpenStreetMap attributes (indoor, attended, paid, surveyed) — not a first-hand rating.
+                </p>
+              </div>
+            </Marker>
+          )}
         </Map>
+
+        {mapError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/90 backdrop-blur-sm p-4 text-center">
+            <p className="text-sm font-medium text-red-400">Map couldn&apos;t load</p>
+            <p className="mt-1 text-xs text-gray-400 max-w-md break-words">{mapError}</p>
+            <p className="mt-2 text-[11px] text-gray-600">
+              Most often this means the Mapbox token is invalid, restricted, or out of free quota.
+            </p>
+          </div>
+        )}
 
         {/* Wind indicator */}
         <div className="absolute top-3 left-3 flex items-center gap-2 rounded-xl bg-gray-900/85 backdrop-blur-sm px-3 py-2 border border-gray-700/60 text-xs text-gray-300">
@@ -583,6 +805,26 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph }: Props) 
         <span className="flex items-center gap-1.5"><span className="inline-block h-1 w-5 rounded-full bg-red-500" />Headwind</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-full bg-sky-500 border border-white" />Start</span>
         <span className="flex items-center gap-1.5"><span className="inline-block h-3 w-3 rounded-full bg-purple-500 border border-white" />End</span>
+        <button
+          type="button"
+          onClick={() => setShowRestaurants((v) => !v)}
+          className={`flex items-center gap-1.5 transition-colors ${showRestaurants ? "text-amber-400" : "text-gray-600 hover:text-gray-400"}`}
+          aria-pressed={showRestaurants}
+          title="Toggle restaurants & cafes"
+        >
+          <span className="inline-flex h-3 w-3 items-center justify-center rounded-full bg-orange-600 border border-white text-[8px] leading-none">🍽</span>
+          Food {showRestaurants ? `(${restaurants.length})` : "off"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowBathrooms((v) => !v)}
+          className={`flex items-center gap-1.5 transition-colors ${showBathrooms ? "text-emerald-400" : "text-gray-600 hover:text-gray-400"}`}
+          aria-pressed={showBathrooms}
+          title="Toggle bathrooms (color = estimated cleanliness)"
+        >
+          <span className="inline-flex h-3 w-3 items-center justify-center rounded-full bg-emerald-600 border border-white text-[8px] leading-none">🚻</span>
+          Bathrooms {showBathrooms ? `(${bathrooms.length})` : "off"}
+        </button>
       </div>
 
       {!isLoggedIn && waypoints.length >= 2 && (
