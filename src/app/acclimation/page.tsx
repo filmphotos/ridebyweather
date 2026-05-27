@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import {
   HEAT_PROTOCOL,
@@ -134,6 +135,49 @@ function WarningList({ items }: { items: WarningSign[] }) {
   );
 }
 
+function TrainingPhotos({
+  environment,
+  caption,
+}: {
+  environment: "heat" | "cold";
+  caption: string;
+}) {
+  // Heat = "hot" condition art; cold = "winter" (heaviest layering) art.
+  const condition = environment === "heat" ? "hot" : "winter";
+  const photos: { sport: "cycling" | "running"; gender: "male" | "female"; alt: string }[] = [
+    { sport: "cycling", gender: "male",   alt: `Male cyclist dressed for ${environment} training` },
+    { sport: "cycling", gender: "female", alt: `Female cyclist dressed for ${environment} training` },
+    { sport: "running", gender: "male",   alt: `Male runner dressed for ${environment} training` },
+    { sport: "running", gender: "female", alt: `Female runner dressed for ${environment} training` },
+  ];
+  return (
+    <div className="mb-5">
+      <div className="rounded-2xl border border-gray-800 bg-[#f5f0e8] p-3 sm:p-4 shadow-xl">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+          {photos.map((p) => (
+            <div
+              key={`${p.sport}-${p.gender}`}
+              className="relative aspect-square rounded-lg overflow-hidden bg-white/40"
+            >
+              <Image
+                src={`/avatars/${p.sport}-${p.gender}-${condition}.png`}
+                alt={p.alt}
+                fill
+                sizes="(max-width: 640px) 50vw, 25vw"
+                className="object-contain p-1"
+              />
+              <div className="absolute bottom-1 left-1 right-1 text-center text-[10px] font-semibold uppercase tracking-wide text-gray-700/80 bg-white/60 rounded px-1 py-0.5">
+                {p.sport === "cycling" ? "Cyclist" : "Runner"} · {p.gender === "male" ? "M" : "F"}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="mt-2 text-xs text-gray-500 text-center">{caption}</p>
+    </div>
+  );
+}
+
 function SportTipCard({
   sport,
   environment,
@@ -230,6 +274,10 @@ export default function AcclimationPage() {
           <span className="text-2xl">🌡️</span>
           <h2 className="text-xl font-bold text-white">10–14 Day Heat Acclimation Protocol</h2>
         </div>
+        <TrainingPhotos
+          environment="heat"
+          caption="Training in heat: light colors, short sleeves, exposed skin for evaporative cooling, sun cover."
+        />
         <p className="text-sm text-gray-400 mb-5 max-w-3xl">
           Train in the heat — outdoors, a garage with no fan, or a controlled hot room. Each
           session should raise core temperature ~1°C and last at least 30 min. Start
@@ -261,6 +309,10 @@ export default function AcclimationPage() {
           <span className="text-2xl">❄️</span>
           <h2 className="text-xl font-bold text-white">Cold Habituation Protocol</h2>
         </div>
+        <TrainingPhotos
+          environment="cold"
+          caption="Training in cold: full coverage, wind-blocking shell, gloves, neck and face protection, no exposed skin."
+        />
         <p className="text-sm text-gray-400 mb-5 max-w-3xl">
           A staged plan blending cold showers, deliberately under-dressed outdoor sessions,
           and optional cold-water immersion. The goal is calm breathing on first cold
