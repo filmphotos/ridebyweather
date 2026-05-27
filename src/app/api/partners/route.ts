@@ -19,10 +19,39 @@ import { verifyToken } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+// Cap total function time well below Vercel's default. Each source has its own
+// timeout (PER_SOURCE_TIMEOUT_MS) — this is the belt to that suspenders.
+export const maxDuration = 25;
+
 const SHOP_LIMIT = 10;
 const MEDICAL_LIMIT = 5;
 const RESTAURANT_LIMIT = 10;
 const BATHROOM_LIMIT = 25;
+
+// Per-source ceiling so one hung upstream (Mapbox Search, Foursquare, DB
+// connection, an OSM mirror that accepts the TCP connect but never responds)
+// can't drag the whole route past Vercel's function timeout. 12s leaves room
+// for legitimate Overpass calls (the slowest legit source we see, ~8s p95)
+// while killing actual hangs fast enough that the browser still has its
+// fetch alive.
+const PER_SOURCE_TIMEOUT_MS = 12_000;
+
+function withTimeout<T>(p: Promise<T>, fallback: T, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeoutP = new Promise<T>((resolve) => {
+    timer = setTimeout(() => {
+      console.error(`[partners] ${label} timed out after ${PER_SOURCE_TIMEOUT_MS}ms`);
+      resolve(fallback);
+    }, PER_SOURCE_TIMEOUT_MS);
+  });
+  const wrapped = p.catch((err) => {
+    console.error(`[partners] ${label} rejected:`, err);
+    return fallback;
+  });
+  return Promise.race([wrapped, timeoutP]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
 
 function haversineMi(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 3958.8;
@@ -53,28 +82,32 @@ export async function GET(req: NextRequest) {
   const lngDelta = radiusMi / (69 * Math.cos((lat * Math.PI) / 180));
 
   const [dbCandidates, yelpC, fsqC, mapboxC, osmC, medicalC, restaurantC, bathroomC, mapboxRestaurantC, mapboxMedicalC, refugeC] = await Promise.all([
-    db.partnerListing.findMany({
-      where: {
-        lat: { gte: lat - latDelta, lte: lat + latDelta },
-        lng: { gte: lng - lngDelta, lte: lng + lngDelta },
-      },
-      orderBy: [{ tier: "desc" }, { isVerified: "desc" }],
-    }),
-    fetchYelpBikeShops(lat, lng, radiusMi),
-    fetchFoursquareBikeShops(lat, lng, radiusMi),
-    fetchMapboxBikeShops(lat, lng, radiusMi),
-    fetchOsmBikeShops(lat, lng, radiusMi),
-    fetchOsmMedical(lat, lng, radiusMi),
-    fetchOsmRestaurants(lat, lng, radiusMi),
-    fetchOsmBathrooms(lat, lng, radiusMi),
+    withTimeout(
+      db.partnerListing.findMany({
+        where: {
+          lat: { gte: lat - latDelta, lte: lat + latDelta },
+          lng: { gte: lng - lngDelta, lte: lng + lngDelta },
+        },
+        orderBy: [{ tier: "desc" }, { isVerified: "desc" }],
+      }),
+      [],
+      "db.partnerListing"
+    ),
+    withTimeout(fetchYelpBikeShops(lat, lng, radiusMi), [], "yelp"),
+    withTimeout(fetchFoursquareBikeShops(lat, lng, radiusMi), [], "foursquare"),
+    withTimeout(fetchMapboxBikeShops(lat, lng, radiusMi), [], "mapboxBikeShops"),
+    withTimeout(fetchOsmBikeShops(lat, lng, radiusMi), [], "osmBikeShops"),
+    withTimeout(fetchOsmMedical(lat, lng, radiusMi), [], "osmMedical"),
+    withTimeout(fetchOsmRestaurants(lat, lng, radiusMi), [], "osmRestaurants"),
+    withTimeout(fetchOsmBathrooms(lat, lng, radiusMi), [], "osmBathrooms"),
     // Mapbox runs in parallel with OSM Overpass and serves as a fallback when
     // the public Overpass mirrors are overloaded (common in dense urban areas).
     // No Mapbox fallback for bathrooms — their Search Box API has no toilet
     // category. We use Refuge Restrooms (refugerestrooms.org) instead, which
     // has real user upvote/downvote signal and stays up when Overpass throttles.
-    fetchMapboxRestaurants(lat, lng, Math.min(radiusMi, 5)),
-    fetchMapboxMedical(lat, lng, Math.min(radiusMi, 10)),
-    fetchRefugeBathrooms(lat, lng, radiusMi),
+    withTimeout(fetchMapboxRestaurants(lat, lng, Math.min(radiusMi, 5)), [], "mapboxRestaurants"),
+    withTimeout(fetchMapboxMedical(lat, lng, Math.min(radiusMi, 10)), [], "mapboxMedical"),
+    withTimeout(fetchRefugeBathrooms(lat, lng, radiusMi), [], "refugeRestrooms"),
   ]);
 
   const dbPartners = dbCandidates.map((p) => ({
