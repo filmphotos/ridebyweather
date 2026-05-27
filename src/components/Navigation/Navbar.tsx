@@ -11,6 +11,7 @@ const navItems = [
   { label: "Walking", href: "/walking" },
   { label: "Ride", href: "/ride" },
   { label: "Group Rides", href: "/group-rides" },
+  { label: "Acclimation", href: "/acclimation" },
   { label: "E-Bike Laws", href: "/ebike-laws" },
   { label: "Features", href: "/features" },
   { label: "Pricing", href: "/pricing" },
