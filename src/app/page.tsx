@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import RotatingActivity from "@/components/Hero/RotatingActivity";
 
 export default function HomePage() {
   return (
@@ -14,7 +15,7 @@ export default function HomePage() {
           </div>
 
           <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-6xl lg:text-7xl">
-            Ride smarter with{" "}
+            <RotatingActivity /> smarter with{" "}
             <span className="bg-gradient-to-r from-sky-400 to-cyan-300 bg-clip-text text-transparent">
               weather intelligence
             </span>
