@@ -10,13 +10,25 @@
   /* When loaded inside the Capacitor Android shell, add hardcoded padding to
      keep the navbar clear of the system status bar. env(safe-area-inset-top)
      is unreliable on most Android phones (reports 0 unless there's a notch),
-     so we use a fixed 32px instead. The class is added by the inline script
-     in <head>. */
+     so we use a fixed 32px instead. */
   html.capacitor-native body {
     padding-bottom: 16px;
   }
   html.capacitor-native .rbw-navbar {
     padding-top: 32px;
+  }
+
+  /* Fallback for the case where window.Capacitor isn't available when the
+     inline detection script runs (race condition during WebView startup):
+     Capacitor apps and installed PWAs both render in standalone display
+     mode, so this catches them without affecting regular browser users. */
+  @media (display-mode: standalone), (display-mode: fullscreen) {
+    .rbw-navbar {
+      padding-top: 32px;
+    }
+    body {
+      padding-bottom: 16px;
+    }
   }
 }
 
