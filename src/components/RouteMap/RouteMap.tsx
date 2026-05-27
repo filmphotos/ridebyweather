@@ -72,7 +72,15 @@ interface Bathroom {
   operator: string | null;
   cleanTier: CleanTier;
   cleanReasons: string[];
+  source?: "refuge" | "osm";
 }
+
+const SOURCE_DISCLAIMER: Record<"refuge" | "osm", string> = {
+  refuge:
+    "Cleanliness estimated from RefugeRestrooms user upvotes and accessibility flags — community-submitted data.",
+  osm:
+    "Cleanliness estimated from OpenStreetMap attributes (indoor, attended, paid, surveyed) — not a first-hand rating.",
+};
 
 const CLEAN_TIER_LABEL: Record<CleanTier, string> = {
   likely_clean: "Likely clean",
@@ -749,7 +757,7 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph, sport = "
                   </p>
                 )}
                 <p className="mt-1.5 text-[10px] text-gray-600 leading-snug">
-                  Cleanliness estimated from OpenStreetMap attributes (indoor, attended, paid, surveyed) — not a first-hand rating.
+                  {SOURCE_DISCLAIMER[selectedBathroom.source ?? "osm"]}
                 </p>
               </div>
             </Marker>

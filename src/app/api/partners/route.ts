@@ -11,6 +11,7 @@ import { fetchYelpBikeShops } from "@/lib/yelpSearch";
 import { fetchOsmMedical } from "@/lib/osmMedical";
 import { fetchOsmRestaurants } from "@/lib/osmRestaurants";
 import { fetchOsmBathrooms } from "@/lib/osmBathrooms";
+import { fetchRefugeBathrooms } from "@/lib/refugeRestrooms";
 import { verifyToken } from "@/lib/auth";
 
 // Always run fresh — don't serve a stale cached payload that might still
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
   const latDelta = radiusMi / 69;
   const lngDelta = radiusMi / (69 * Math.cos((lat * Math.PI) / 180));
 
-  const [dbCandidates, yelpC, fsqC, mapboxC, osmC, medicalC, restaurantC, bathroomC, mapboxRestaurantC, mapboxMedicalC] = await Promise.all([
+  const [dbCandidates, yelpC, fsqC, mapboxC, osmC, medicalC, restaurantC, bathroomC, mapboxRestaurantC, mapboxMedicalC, refugeC] = await Promise.all([
     db.partnerListing.findMany({
       where: {
         lat: { gte: lat - latDelta, lte: lat + latDelta },
@@ -69,9 +70,11 @@ export async function GET(req: NextRequest) {
     // Mapbox runs in parallel with OSM Overpass and serves as a fallback when
     // the public Overpass mirrors are overloaded (common in dense urban areas).
     // No Mapbox fallback for bathrooms — their Search Box API has no toilet
-    // category, so the bathroom layer is OSM-only.
+    // category. We use Refuge Restrooms (refugerestrooms.org) instead, which
+    // has real user upvote/downvote signal and stays up when Overpass throttles.
     fetchMapboxRestaurants(lat, lng, Math.min(radiusMi, 5)),
     fetchMapboxMedical(lat, lng, Math.min(radiusMi, 10)),
+    fetchRefugeBathrooms(lat, lng, radiusMi),
   ]);
 
   const dbPartners = dbCandidates.map((p) => ({
@@ -178,10 +181,19 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => a.distanceMi - b.distanceMi)
     .slice(0, RESTAURANT_LIMIT);
 
-  // OSM-only — Mapbox Search Box has no toilet category. The shared in-flight
-  // cache in racedOverpass + the client-side dedup in partnersClient handle
-  // reliability so Overpass mirror throttling doesn't empty the layer.
-  const bathrooms = bathroomC
+  // Merge Refuge Restrooms (refugerestrooms.org — real user upvotes, no
+  // API key, stays up when Overpass mirrors throttle) with OSM toilets.
+  // Refuge first because its cleanliness signal is strongest; OSM fills
+  // gaps where Refuge has no entries. Dedup by rounded coordinate (~11 m)
+  // so the same toilet doesn't double-pin from both sources.
+  const seenBath = new Set<string>();
+  const bathrooms = [...refugeC, ...bathroomC]
+    .filter((b) => {
+      const k = `${b.lat.toFixed(4)},${b.lng.toFixed(4)}`;
+      if (seenBath.has(k)) return false;
+      seenBath.add(k);
+      return true;
+    })
     .map((b) => ({ ...b, distanceMi: haversineMi(lat, lng, b.lat, b.lng) }))
     .filter((b) => b.distanceMi <= radiusMi)
     .sort((a, b) => a.distanceMi - b.distanceMi)
