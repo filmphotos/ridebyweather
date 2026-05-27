@@ -16,8 +16,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const redirectUri = `${appUrl}/api/strava/callback`;
+    const redirectUri = `${req.nextUrl.origin}/api/strava/callback`;
     const tokens = await exchangeStravaCode(code, redirectUri);
 
     await db.deviceIntegration.upsert({
