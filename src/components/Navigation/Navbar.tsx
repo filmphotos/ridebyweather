@@ -79,7 +79,10 @@ export default function Navbar() {
   useEffect(() => { setMobileNavOpen(false); }, [pathname]);
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-gray-800 bg-gray-950/95 backdrop-blur">
+    <nav
+      className="sticky top-0 z-50 border-b border-gray-800 bg-gray-950/95 backdrop-blur"
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
+    >
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
         <Link href="/" className="flex items-center gap-2 font-bold text-lg sm:text-xl text-white shrink-0">
           <svg className="h-6 w-6 sm:h-7 sm:w-7 text-sky-500" viewBox="0 0 24 24" fill="currentColor">
