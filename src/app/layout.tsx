@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/Navigation/Navbar";
 import ServiceWorkerRegistration from "@/components/PWA/ServiceWorkerRegistration";
+import CapacitorInit from "@/components/Native/CapacitorInit";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
@@ -57,8 +58,18 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={inter.variable}>
+      <head>
+        {/* Tag <html> with capacitor-native class BEFORE first paint so the
+            navbar can apply status-bar-height padding instantly. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{if(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()){document.documentElement.classList.add('capacitor-native');}}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className="min-h-screen bg-gray-950">
         <ServiceWorkerRegistration />
+        <CapacitorInit />
         <Navbar />
         <main className="min-h-[calc(100vh-64px)]">{children}</main>
       </body>

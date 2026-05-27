@@ -5,12 +5,18 @@
 @layer base {
   body {
     @apply bg-gray-950 text-gray-100 antialiased;
-    /* Respect device safe areas (notch / status bar / nav bar) when rendered
-       inside a Capacitor WebView with viewport-fit=cover. */
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-    padding-left: env(safe-area-inset-left);
-    padding-right: env(safe-area-inset-right);
+  }
+
+  /* When loaded inside the Capacitor Android shell, add hardcoded padding to
+     keep the navbar clear of the system status bar. env(safe-area-inset-top)
+     is unreliable on most Android phones (reports 0 unless there's a notch),
+     so we use a fixed 32px instead. The class is added by the inline script
+     in <head>. */
+  html.capacitor-native body {
+    padding-bottom: 16px;
+  }
+  html.capacitor-native .rbw-navbar {
+    padding-top: 32px;
   }
 }
 
