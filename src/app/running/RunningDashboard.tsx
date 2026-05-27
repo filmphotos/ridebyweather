@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import ForecastTimeline from "@/components/Forecast/ForecastTimeline";
 import WeatherCard from "@/components/WeatherCard/WeatherCard";
 import WeatherAvatar from "@/components/WeatherAvatar/WeatherAvatar";
 import NearbyPartners from "@/components/Partners/NearbyPartners";
 import type { GeoResult } from "@/app/api/geocode/route";
+
+const RouteMap = dynamic(() => import("@/components/RouteMap/RouteMap"), { ssr: false });
 
 interface RunScoreData {
   score: number;
@@ -155,6 +158,17 @@ export default function RunningDashboard({ variant = "running" }: RunningDashboa
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [gender, setGender] = useState<"male" | "female">("male");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("rbw_gender");
+    if (saved === "male" || saved === "female") setGender(saved);
+  }, []);
+
+  const updateGender = (g: "male" | "female") => {
+    setGender(g);
+    localStorage.setItem("rbw_gender", g);
+  };
 
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<GeoResult[]>([]);
@@ -247,6 +261,29 @@ export default function RunningDashboard({ variant = "running" }: RunningDashboa
               {location.name ?? `${location.lat.toFixed(3)}, ${location.lng.toFixed(3)}`}
             </p>
           )}
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs text-gray-500">Avatar:</span>
+            <div className="inline-flex rounded-lg border border-gray-800 bg-gray-900 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => updateGender("male")}
+                className={`px-3 py-1 rounded-md transition-colors ${
+                  gender === "male" ? "bg-sky-500 text-white" : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                Male
+              </button>
+              <button
+                type="button"
+                onClick={() => updateGender("female")}
+                className={`px-3 py-1 rounded-md transition-colors ${
+                  gender === "female" ? "bg-sky-500 text-white" : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                Female
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto">
@@ -373,6 +410,7 @@ export default function RunningDashboard({ variant = "running" }: RunningDashboa
               tempF={data.weather.tempF}
               precipProb={data.weather.precipProb}
               windSpeedMph={data.weather.windSpeedMph}
+              gender={gender}
               sport={variant}
             />
           </div>
@@ -381,6 +419,19 @@ export default function RunningDashboard({ variant = "running" }: RunningDashboa
           {location && (
             <div className="lg:col-span-3">
               <ForecastTimeline lat={location.lat} lng={location.lng} />
+            </div>
+          )}
+
+          {/* Route Wind Planner — uses Mapbox walking profile for both running & walking */}
+          {location && (
+            <div className="lg:col-span-2">
+              <RouteMap
+                lat={location.lat}
+                lng={location.lng}
+                windDirDeg={data.weather.windDirDeg}
+                windSpeedMph={data.weather.windSpeedMph}
+                sport={variant}
+              />
             </div>
           )}
 

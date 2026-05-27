@@ -3,11 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node scripts/prisma-schema-local.mjs && prisma generate --schema=prisma/schema.local.prisma",
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "prisma generate",
+    "db:generate:local": "node scripts/prisma-schema-local.mjs && prisma generate --schema=prisma/schema.local.prisma",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",

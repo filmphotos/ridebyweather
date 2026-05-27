@@ -1,8 +1,10 @@
 {
+  "id": "/?source=pwa",
   "name": "RideByWeather",
   "short_name": "RideByWeather",
   "description": "Cycling weather intelligence with Ride Score and wind-aware routing",
-  "start_url": "/cycling",
+  "start_url": "/cycling?source=pwa",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#030712",
   "theme_color": "#0284c7",
@@ -12,14 +14,40 @@
       "src": "/icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "maskable any"
+      "purpose": "any"
     },
     {
       "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable any"
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
-  "categories": ["sports", "weather", "fitness"]
+  "categories": ["sports", "weather", "fitness"],
+  "shortcuts": [
+    {
+      "name": "Today's Ride Score",
+      "short_name": "Ride",
+      "url": "/cycling?source=pwa-shortcut",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Live Ride",
+      "short_name": "Live",
+      "url": "/ride?source=pwa-shortcut",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
 }

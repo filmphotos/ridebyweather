@@ -183,6 +183,29 @@ export default function CyclingDashboard() {
               {location.name ?? `${location.lat.toFixed(3)}, ${location.lng.toFixed(3)}`}
             </p>
           )}
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs text-gray-500">Avatar:</span>
+            <div className="inline-flex rounded-lg border border-gray-800 bg-gray-900 p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => updateGender("male")}
+                className={`px-3 py-1 rounded-md transition-colors ${
+                  gender === "male" ? "bg-sky-500 text-white" : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                Male
+              </button>
+              <button
+                type="button"
+                onClick={() => updateGender("female")}
+                className={`px-3 py-1 rounded-md transition-colors ${
+                  gender === "female" ? "bg-sky-500 text-white" : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                Female
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto">
@@ -287,29 +310,6 @@ export default function CyclingDashboard() {
               condition={data.weather.condition}
               fetchedAt={fetchedAt ?? undefined}
             />
-            <div className="flex items-center justify-end gap-2">
-              <span className="text-xs text-gray-500">Avatar:</span>
-              <div className="inline-flex rounded-lg border border-gray-800 bg-gray-900 p-0.5 text-xs">
-                <button
-                  type="button"
-                  onClick={() => updateGender("male")}
-                  className={`px-3 py-1 rounded-md transition-colors ${
-                    gender === "male" ? "bg-sky-500 text-white" : "text-gray-400 hover:text-gray-200"
-                  }`}
-                >
-                  Male
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateGender("female")}
-                  className={`px-3 py-1 rounded-md transition-colors ${
-                    gender === "female" ? "bg-sky-500 text-white" : "text-gray-400 hover:text-gray-200"
-                  }`}
-                >
-                  Female
-                </button>
-              </div>
-            </div>
             <WeatherAvatar
               tempF={data.weather.tempF}
               precipProb={data.weather.precipProb}
