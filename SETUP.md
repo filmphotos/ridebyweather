@@ -108,6 +108,30 @@ Cycling weights:
 - **Humidity: 10%** (comfort multiplier)
 - **Safety Override: 5%** (storm/ice caps score ≤ 3)
 
+## Android App (Capacitor)
+
+The Next.js web app is wrapped as a native Android app via Capacitor. The shell loads `https://ridebyweather.com` (configured in `capacitor.config.ts`), so the Play Store build always reflects the live site.
+
+### Prerequisites (one-time)
+
+1. **JDK 21** — install Temurin: https://adoptium.net (or `winget install EclipseAdoptium.Temurin.21.JDK`)
+2. **Android Studio** — https://developer.android.com/studio (includes Android SDK + emulator)
+3. Set `JAVA_HOME` to the JDK install path; restart shell.
+
+### Build & run
+
+```bash
+npm run android:sync   # copy web assets + plugin config into android/
+npm run android:open   # open android/ in Android Studio
+npm run android:run    # build + install on connected device/emulator
+```
+
+In Android Studio: **Build → Generate Signed Bundle/APK** to produce a Play Store `.aab`.
+
+### Changing the loaded URL
+
+Edit `server.url` in `capacitor.config.ts` (e.g. point at a staging deploy), then `npm run android:sync`.
+
 ## Next Steps (Phase 2)
 
 - [ ] Auth (NextAuth.js + JWT)

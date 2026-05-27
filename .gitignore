@@ -31,3 +31,15 @@ next-env.d.ts
 # Large source artwork (split into per-condition avatars in public/avatars/)
 public/running-avatars-grid.png
 scripts/_debug-col*.png
+
+# Android (Capacitor) build artifacts
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/captures/
+android/local.properties
+android/app/release/
+*.iml
+*.keystore
+*.jks
