@@ -19,11 +19,6 @@ export async function GET(req: NextRequest) {
   const parsed = QuerySchema.safeParse(params);
 
   if (!parsed.success) {
-    console.error(
-      "[ride-score] 400 invalid params:",
-      JSON.stringify(params),
-      JSON.stringify(parsed.error.flatten().fieldErrors)
-    );
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 

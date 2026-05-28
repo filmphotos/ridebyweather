@@ -20,4 +20,15 @@ class RbwDelegate extends WatchUi.BehaviorDelegate {
         _view.triggerRefresh();
         return true;
     }
+
+    // Up/Down buttons on the Edge page between Score / Restrooms / Food.
+    function onNextPage() as Boolean {
+        _view.nextPage();
+        return true;
+    }
+
+    function onPreviousPage() as Boolean {
+        _view.prevPage();
+        return true;
+    }
 }

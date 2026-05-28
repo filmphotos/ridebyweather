@@ -2,25 +2,34 @@ import Toybox.WatchUi;
 import Toybox.Graphics;
 import Toybox.Lang;
 import Toybox.Communications;
+import Toybox.Timer;
+import Toybox.Math;
 
-// Three display modes:
-//   "status"  - a centered message ("Acquiring GPS...", errors)
+// Display modes:
+//   "status"  - centered message (GPS, errors); optional 2nd line
 //   "pairing" - QR code + short code to sign in from the phone
-//   "score"   - the ride/heat-risk score in its risk color
+//   "score"   - Garmin-style dashboard: arc gauge + data grid
 class RbwView extends WatchUi.View {
 
     hidden var _mode = "status";
     hidden var _status = "Loading...";
+    hidden var _status2 = null;
 
     hidden var _pairingCode = "";
     hidden var _qrBitmap = null;
 
-    hidden var _score = null;
-    hidden var _label = null;
-    hidden var _temp = null;
+    hidden var _data = null;          // Dictionary of score + weather
     hidden var _color = Graphics.COLOR_LT_GRAY;
 
+    // Pages: 0 = score, 1 = restrooms radar, 2 = food radar
+    hidden var _page = 0;
+    hidden var _restrooms = null;
+    hidden var _food = null;
+    hidden var _restroomsState = "idle";   // idle | loading | ready | error
+    hidden var _foodState = "idle";
+
     hidden var _api;
+    hidden var _refreshTimer;
 
     function initialize() {
         View.initialize();
@@ -29,9 +38,25 @@ class RbwView extends WatchUi.View {
 
     function onShow() as Void {
         _api.start();
+        // Keep the score fresh as conditions/location change during a ride.
+        if (_refreshTimer == null) {
+            _refreshTimer = new Timer.Timer();
+        }
+        _refreshTimer.start(method(:onTick), 120000, true);
     }
 
-    // Triggered by the delegate (button press / tap): refresh or retry pairing.
+    function onHide() as Void {
+        if (_refreshTimer != null) {
+            _refreshTimer.stop();
+        }
+    }
+
+    function onTick() as Void {
+        if (_mode.equals("score")) {
+            _api.start();
+        }
+    }
+
     function triggerRefresh() as Void {
         _api.start();
     }
@@ -39,6 +64,14 @@ class RbwView extends WatchUi.View {
     function setStatus(msg as String) as Void {
         _mode = "status";
         _status = msg;
+        _status2 = null;
+        WatchUi.requestUpdate();
+    }
+
+    function setStatus2(line1, line2) as Void {
+        _mode = "status";
+        _status = line1;
+        _status2 = line2;
         WatchUi.requestUpdate();
     }
 
@@ -64,13 +97,56 @@ class RbwView extends WatchUi.View {
         }
     }
 
-    function setData(score, label, colorHex, temp) as Void {
+    function setScore(d) as Void {
         _mode = "score";
-        _score = score;
-        _label = label;
-        _temp = temp;
-        _color = parseColor(colorHex);
+        _data = d;
+        _color = parseColor(d.hasKey("color") ? d["color"] : null);
         WatchUi.requestUpdate();
+    }
+
+    function setPoi(type, items) as Void {
+        if (type.equals("food")) {
+            _food = items;
+            _foodState = "ready";
+        } else {
+            _restrooms = items;
+            _restroomsState = "ready";
+        }
+        WatchUi.requestUpdate();
+    }
+
+    function setPoiError(type, code) as Void {
+        if (type.equals("food")) {
+            _foodState = "error";
+        } else {
+            _restroomsState = "error";
+        }
+        WatchUi.requestUpdate();
+    }
+
+    // Called by the delegate's up/down buttons.
+    function nextPage() as Void {
+        if (!_mode.equals("score")) { return; }
+        _page = (_page + 1) % 3;
+        onPageEnter();
+        WatchUi.requestUpdate();
+    }
+
+    function prevPage() as Void {
+        if (!_mode.equals("score")) { return; }
+        _page = (_page + 2) % 3;
+        onPageEnter();
+        WatchUi.requestUpdate();
+    }
+
+    hidden function onPageEnter() as Void {
+        if (_page == 1 && _restroomsState.equals("idle")) {
+            _restroomsState = "loading";
+            _api.fetchPoi("restrooms");
+        } else if (_page == 2 && _foodState.equals("idle")) {
+            _foodState = "loading";
+            _api.fetchPoi("food");
+        }
     }
 
     function onUpdate(dc as Graphics.Dc) as Void {
@@ -83,13 +159,255 @@ class RbwView extends WatchUi.View {
         if (_mode.equals("pairing")) {
             drawPairing(dc, w, h, cx);
         } else if (_mode.equals("score")) {
-            drawScore(dc, cx, h / 2);
+            if (_page == 1) {
+                drawPoiPage(dc, w, h, _restrooms, _restroomsState, "RESTROOMS", Graphics.COLOR_BLUE);
+            } else if (_page == 2) {
+                drawPoiPage(dc, w, h, _food, _foodState, "FOOD", Graphics.COLOR_ORANGE);
+            } else {
+                drawDashboard(dc, w, h);
+            }
+            drawPageIndicator(dc, w, h);
         } else {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h / 2, Graphics.FONT_SMALL, _status,
+            var y1 = (_status2 == null) ? (h / 2) : (h * 0.42);
+            dc.drawText(cx, y1, Graphics.FONT_SMALL, _status,
+                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            if (_status2 != null) {
+                dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(cx, h * 0.55, Graphics.FONT_XTINY, _status2,
+                    Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            }
+        }
+    }
+
+    // ---------- Score dashboard ----------
+
+    hidden function drawDashboard(dc as Graphics.Dc, w as Number, h as Number) as Void {
+        var cx = w / 2;
+
+        // Header band in the risk color with the label (GOOD / TOUGH / etc.).
+        var headerH = (h * 0.11).toNumber();
+        dc.setColor(_color, _color);
+        dc.fillRectangle(0, 0, w, headerH);
+        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
+        var label = gvStr("label", "RIDE SCORE");
+        dc.drawText(cx, headerH / 2, Graphics.FONT_TINY, label,
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // Arc gauge: 270 degree sweep, filled proportional to score/10.
+        var gcy = (h * 0.36).toNumber();
+        var radius = ((w < h ? w : h) * 0.26).toNumber();
+        var pen = (radius * 0.18).toNumber();
+        if (pen < 6) { pen = 6; }
+        dc.setPenWidth(pen);
+
+        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawArc(cx, gcy, radius, Graphics.ARC_CLOCKWISE, 225, 315);
+
+        var score = gvNum("score");
+        if (score != null && score > 0) {
+            var sweep = (score / 10.0) * 270.0;
+            var endA = 225.0 - sweep;
+            while (endA < 0) { endA += 360.0; }
+            dc.setColor(_color, Graphics.COLOR_TRANSPARENT);
+            dc.drawArc(cx, gcy, radius, Graphics.ARC_CLOCKWISE, 225, endA.toNumber());
+        }
+        dc.setPenWidth(1);
+
+        // Score number + "out of 10" inside the gauge.
+        var scoreStr = (score == null) ? "--" : score.format("%.1f");
+        dc.setColor(_color, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, gcy - 4, Graphics.FONT_NUMBER_MILD, scoreStr,
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, gcy + (radius * 0.42).toNumber(), Graphics.FONT_XTINY, "out of 10",
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        // 2x2 data grid.
+        var colL = (w * 0.27).toNumber();
+        var colR = (w * 0.73).toNumber();
+        var row1 = (h * 0.61).toNumber();
+        var row2 = (h * 0.80).toNumber();
+
+        drawCell(dc, colL, row1, "TEMP", tempStr("tempF"));
+        drawCell(dc, colR, row1, "WIND", windStr());
+        drawCell(dc, colL, row2, "FEELS", tempStr("feelsLikeF"));
+        drawCell(dc, colR, row2, "HUM", pctStr("humidity"));
+
+        // Small wind-direction arrow next to the WIND cell.
+        var wdir = gvNum("windDirDeg");
+        if (wdir != null) {
+            drawArrow(dc, (w * 0.92).toNumber(), row1 + (h * 0.045).toNumber(),
+                (h * 0.028).toNumber(), wdir);
+        }
+
+        // Conditions / precip footer.
+        var cond = gvStr("condition", "");
+        var precip = gvNum("precipProb");
+        var footer = cond;
+        if (precip != null) {
+            if (!footer.equals("")) { footer += "  "; }
+            footer += precip.toNumber().toString() + "% rain";
+        }
+        if (!footer.equals("")) {
+            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.93, Graphics.FONT_XTINY, footer,
                 Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
     }
+
+    hidden function drawCell(dc as Graphics.Dc, x as Number, y as Number, label as String, value as String) as Void {
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(x, y, Graphics.FONT_XTINY, label, Graphics.TEXT_JUSTIFY_CENTER);
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(x, y + 16, Graphics.FONT_SMALL, value, Graphics.TEXT_JUSTIFY_CENTER);
+    }
+
+    // Filled triangle pointing toward where the wind is blowing.
+    hidden function drawArrow(dc as Graphics.Dc, cx as Number, cy as Number, size as Number, dirDeg) as Void {
+        var ang = (dirDeg + 180.0) * Math.PI / 180.0; // direction wind blows toward
+        var tipx = cx + size * Math.sin(ang);
+        var tipy = cy - size * Math.cos(ang);
+        var a2 = ang + 2.443; // +140 degrees
+        var a3 = ang - 2.443; // -140 degrees
+        var blx = cx + size * Math.sin(a2);
+        var bly = cy - size * Math.cos(a2);
+        var brx = cx + size * Math.sin(a3);
+        var bry = cy - size * Math.cos(a3);
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.fillPolygon([
+            [tipx.toNumber(), tipy.toNumber()],
+            [blx.toNumber(), bly.toNumber()],
+            [brx.toNumber(), bry.toNumber()]
+        ]);
+    }
+
+    // ---------- Nearby POI radar ----------
+
+    hidden function drawPoiPage(dc as Graphics.Dc, w as Number, h as Number, items, state, title as String, dotColor) as Void {
+        var cx = w / 2;
+        var headerH = (h * 0.11).toNumber();
+        dc.setColor(dotColor, dotColor);
+        dc.fillRectangle(0, 0, w, headerH);
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, headerH / 2, Graphics.FONT_TINY, title,
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+
+        if (state.equals("loading")) {
+            dc.drawText(cx, h / 2, Graphics.FONT_SMALL, "Finding nearby...",
+                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            return;
+        }
+        if (state.equals("error")) {
+            dc.drawText(cx, h / 2, Graphics.FONT_SMALL, "Couldn't load",
+                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            return;
+        }
+        if (items == null || items.size() == 0) {
+            dc.drawText(cx, h / 2, Graphics.FONT_SMALL, "None within 3 mi",
+                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            return;
+        }
+
+        drawRadar(dc, w, h, items, dotColor);
+        drawNearestList(dc, w, h, items);
+    }
+
+    hidden function drawRadar(dc as Graphics.Dc, w as Number, h as Number, items, dotColor) as Void {
+        var cx = w / 2;
+        var rcy = (h * 0.36).toNumber();
+        var R = ((w < h ? w : h) * 0.28).toNumber();
+
+        dc.setPenWidth(1);
+        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawCircle(cx, rcy, R);
+        dc.drawCircle(cx, rcy, R / 2);
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(cx, rcy - R - 12, Graphics.FONT_XTINY, "N", Graphics.TEXT_JUSTIFY_CENTER);
+
+        // Farthest item sets the ring scale (min 0.5 mi).
+        var maxMi = 0.5;
+        for (var i = 0; i < items.size(); i++) {
+            var d = poiNum(items[i], "distanceMi");
+            if (d != null && d > maxMi) { maxMi = d; }
+        }
+
+        // Plot each POI by bearing (north-up) and scaled distance.
+        for (var m = 0; m < items.size(); m++) {
+            var it = items[m];
+            var b = poiNum(it, "bearingDeg");
+            var dd = poiNum(it, "distanceMi");
+            if (b == null || dd == null) { continue; }
+            var rad = b * Math.PI / 180.0;
+            var rr = (dd / maxMi) * R;
+            if (rr > R) { rr = R; }
+            var px = cx + rr * Math.sin(rad);
+            var py = rcy - rr * Math.cos(rad);
+            dc.setColor(dotColor, Graphics.COLOR_TRANSPARENT);
+            dc.fillCircle(px.toNumber(), py.toNumber(), 4);
+        }
+
+        // User at center.
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(cx, rcy, 3);
+
+        // Outer-ring distance label.
+        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+        var ringLbl = (maxMi >= 1) ? maxMi.format("%.0f") : maxMi.format("%.1f");
+        dc.drawText(cx + R - 2, rcy, Graphics.FONT_XTINY, ringLbl + "mi",
+            Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+    }
+
+    hidden function drawNearestList(dc as Graphics.Dc, w as Number, h as Number, items) as Void {
+        var cx = w / 2;
+        var count = items.size();
+        if (count > 3) { count = 3; }
+        var y = (h * 0.66).toNumber();
+        for (var i = 0; i < count; i++) {
+            var it = items[i];
+            var name = poiStr(it, "name", "?");
+            if (name.length() > 16) { name = name.substring(0, 15) + "."; }
+            var d = poiNum(it, "distanceMi");
+            var dStr = (d == null) ? "" : d.format("%.1f") + "mi";
+            var dir = compass(poiNum(it, "bearingDeg"));
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, y, Graphics.FONT_XTINY, name + "  " + dStr + " " + dir,
+                Graphics.TEXT_JUSTIFY_CENTER);
+            y += (h * 0.075).toNumber();
+        }
+    }
+
+    hidden function drawPageIndicator(dc as Graphics.Dc, w as Number, h as Number) as Void {
+        var cx = w / 2;
+        var y = (h * 0.965).toNumber();
+        var gap = 12;
+        var startX = cx - gap;
+        for (var i = 0; i < 3; i++) {
+            if (i == _page) {
+                dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+                dc.fillCircle(startX + i * gap, y, 3);
+            } else {
+                dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
+                dc.fillCircle(startX + i * gap, y, 2);
+            }
+        }
+    }
+
+    hidden function poiNum(it, key) {
+        if (it == null || !(it instanceof Dictionary) || !it.hasKey(key) || it[key] == null) {
+            return null;
+        }
+        return it[key];
+    }
+
+    hidden function poiStr(it, key, fallback) {
+        if (it == null || !(it instanceof Dictionary) || !it.hasKey(key) || it[key] == null) {
+            return fallback;
+        }
+        return it[key];
+    }
+
+    // ---------- Pairing ----------
 
     hidden function drawPairing(dc as Graphics.Dc, w as Number, h as Number, cx as Number) as Void {
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
@@ -108,24 +426,48 @@ class RbwView extends WatchUi.View {
         }
     }
 
-    hidden function drawScore(dc as Graphics.Dc, cx as Number, cy as Number) as Void {
-        var scoreStr = "--";
-        if (_score != null) {
-            scoreStr = _score.toNumber().toString();
-        }
-        dc.setColor(_color, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, cy - 28, Graphics.FONT_NUMBER_MEDIUM, scoreStr,
-            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    // ---------- Helpers ----------
 
-        if (_label != null) {
-            dc.drawText(cx, cy + 22, Graphics.FONT_SMALL, _label,
-                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+    hidden function gvNum(key) {
+        if (_data == null || !_data.hasKey(key) || _data[key] == null) {
+            return null;
         }
-        if (_temp != null) {
-            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, cy + 48, Graphics.FONT_TINY, _temp.toNumber().toString() + "°F",
-                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        return _data[key];
+    }
+
+    hidden function gvStr(key, fallback) {
+        if (_data == null || !_data.hasKey(key) || _data[key] == null) {
+            return fallback;
         }
+        return _data[key];
+    }
+
+    hidden function tempStr(key) {
+        var v = gvNum(key);
+        return (v == null) ? "--" : v.toNumber().toString() + "°";
+    }
+
+    hidden function pctStr(key) {
+        var v = gvNum(key);
+        return (v == null) ? "--" : v.toNumber().toString() + "%";
+    }
+
+    hidden function windStr() {
+        var v = gvNum("windSpeedMph");
+        var dir = compass(gvNum("windDirDeg"));
+        if (v == null) { return "--"; }
+        var s = v.toNumber().toString();
+        if (!dir.equals("")) { s += " " + dir; }
+        return s;
+    }
+
+    hidden function compass(deg) {
+        if (deg == null) { return ""; }
+        var d = deg.toNumber();              // integer degrees
+        var n = ((d % 360) + 360) % 360;     // normalize 0..359
+        var idx = ((n + 22) / 45) % 8;       // nearest of 8 points
+        var dirs = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+        return dirs[idx];
     }
 
     // "#RRGGBB" -> 0xRRGGBB int that Graphics accepts as a color.
