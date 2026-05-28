@@ -3,7 +3,7 @@
 // - Implements a minimal fetch handler so Chrome considers the app installable
 //   and so navigations have a basic offline fallback.
 
-const CACHE_VERSION = "rbw-v1";
+const CACHE_VERSION = "rbw-v2";
 const OFFLINE_URL = "/offline.html";
 const PRECACHE_URLS = [
   OFFLINE_URL,
