@@ -43,6 +43,7 @@ class RbwView extends WatchUi.View {
 
     hidden var _api;
     hidden var _refreshTimer;
+    hidden var _uiTimer;       // 1s tick while recording, to update ride stats
 
     function initialize() {
         View.initialize();
@@ -205,6 +206,7 @@ class RbwView extends WatchUi.View {
             _session.save();
             _session = null;
             _recording = false;
+            if (_uiTimer != null) { _uiTimer.stop(); }
         } else {
             _session = ActivityRecording.createSession({
                 :name => "RideByWeather",
@@ -212,8 +214,14 @@ class RbwView extends WatchUi.View {
             });
             _session.start();
             _recording = true;
+            if (_uiTimer == null) { _uiTimer = new Timer.Timer(); }
+            _uiTimer.start(method(:onUiTick), 1000, true);
         }
         WatchUi.requestUpdate();
+    }
+
+    function onUiTick() as Void {
+        if (_recording) { WatchUi.requestUpdate(); }
     }
 
     hidden function onPageEnter() as Void {
@@ -354,19 +362,56 @@ class RbwView extends WatchUi.View {
                 (h * 0.028).toNumber(), wdir);
         }
 
-        // Conditions / precip footer.
-        var cond = gvStr("condition", "");
-        var precip = gvNum("precipProb");
-        var footer = cond;
-        if (precip != null) {
-            if (!footer.equals("")) { footer += "  "; }
-            footer += precip.toNumber().toString() + "% rain";
-        }
-        if (!footer.equals("")) {
-            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, h * 0.93, Graphics.FONT_XTINY, footer,
+        // Footer: live ride stats while recording, otherwise conditions.
+        if (_recording) {
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h * 0.93, Graphics.FONT_XTINY, rideStatsLine(),
                 Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        } else {
+            var cond = gvStr("condition", "");
+            var precip = gvNum("precipProb");
+            var footer = cond;
+            if (precip != null) {
+                if (!footer.equals("")) { footer += "  "; }
+                footer += precip.toNumber().toString() + "% rain";
+            }
+            if (!footer.equals("")) {
+                dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(cx, h * 0.93, Graphics.FONT_XTINY, footer,
+                    Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+            }
         }
+    }
+
+    // "12:34  4.2mi  15mph" from the active recording session.
+    hidden function rideStatsLine() as String {
+        var info = Activity.getActivityInfo();
+        var t = "0:00";
+        var dist = "0.0mi";
+        var spd = "0mph";
+        if (info != null) {
+            if (info.timerTime != null) { t = msToClock(info.timerTime); }
+            if (info.elapsedDistance != null) {
+                dist = (info.elapsedDistance * 0.000621371).format("%.1f") + "mi";
+            }
+            if (info.currentSpeed != null) {
+                spd = (info.currentSpeed * 2.23694).format("%d") + "mph";
+            }
+        }
+        return t + "  " + dist + "  " + spd;
+    }
+
+    hidden function msToClock(ms) as String {
+        var total = ms / 1000;
+        var hrs = total / 3600;
+        var mins = (total % 3600) / 60;
+        var secs = total % 60;
+        var mm = mins.format("%02d");
+        var ss = secs.format("%02d");
+        if (hrs > 0) {
+            return hrs.format("%d") + ":" + mm + ":" + ss;
+        }
+        return mins.format("%d") + ":" + ss;
     }
 
     hidden function drawCell(dc as Graphics.Dc, x as Number, y as Number, label as String, value as String) as Void {
