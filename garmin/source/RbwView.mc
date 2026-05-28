@@ -21,12 +21,14 @@ class RbwView extends WatchUi.View {
     hidden var _data = null;          // Dictionary of score + weather
     hidden var _color = Graphics.COLOR_LT_GRAY;
 
-    // Pages: 0 = score, 1 = restrooms radar, 2 = food radar
+    // Pages: 0 = score, 1 = map, 2 = nearby list
     hidden var _page = 0;
     hidden var _restrooms = null;
     hidden var _food = null;
     hidden var _restroomsState = "idle";   // idle | loading | ready | error
     hidden var _foodState = "idle";
+    hidden var _mapBitmap = null;
+    hidden var _mapState = "idle";
 
     hidden var _api;
     hidden var _refreshTimer;
@@ -140,13 +142,41 @@ class RbwView extends WatchUi.View {
     }
 
     hidden function onPageEnter() as Void {
-        if (_page == 1 && _restroomsState.equals("idle")) {
-            _restroomsState = "loading";
-            _api.fetchPoi("restrooms");
-        } else if (_page == 2 && _foodState.equals("idle")) {
-            _foodState = "loading";
-            _api.fetchPoi("food");
+        if (_page == 1 && _mapState.equals("idle")) {
+            _mapState = "loading";
+            _api.fetchMap();
+        } else if (_page == 2) {
+            if (_restroomsState.equals("idle")) {
+                _restroomsState = "loading";
+                _api.fetchRestrooms();
+            }
+            if (_foodState.equals("idle")) {
+                _foodState = "loading";
+                _api.fetchFood();
+            }
         }
+    }
+
+    // Called by the Api with the /api/map URL; downloads the PNG.
+    function loadMap(url) as Void {
+        _mapState = "loading";
+        WatchUi.requestUpdate();
+        var options = {
+            :maxWidth => 240,
+            :maxHeight => 240,
+            :dithering => Communications.IMAGE_DITHERING_NONE
+        };
+        Communications.makeImageRequest(url, null, options, method(:onMapImage));
+    }
+
+    function onMapImage(responseCode as Number, data as WatchUi.BitmapResource or Graphics.BitmapReference or Null) as Void {
+        if (responseCode == 200 && data != null) {
+            _mapBitmap = data;
+            _mapState = "ready";
+        } else {
+            _mapState = "error";
+        }
+        WatchUi.requestUpdate();
     }
 
     function onUpdate(dc as Graphics.Dc) as Void {
@@ -160,9 +190,9 @@ class RbwView extends WatchUi.View {
             drawPairing(dc, w, h, cx);
         } else if (_mode.equals("score")) {
             if (_page == 1) {
-                drawPoiPage(dc, w, h, _restrooms, _restroomsState, "RESTROOMS", Graphics.COLOR_BLUE);
+                drawMapPage(dc, w, h);
             } else if (_page == 2) {
-                drawPoiPage(dc, w, h, _food, _foodState, "FOOD", Graphics.COLOR_ORANGE);
+                drawListPage(dc, w, h);
             } else {
                 drawDashboard(dc, w, h);
             }
@@ -282,99 +312,91 @@ class RbwView extends WatchUi.View {
         ]);
     }
 
-    // ---------- Nearby POI radar ----------
+    // ---------- Map page (Mapbox static image) ----------
 
-    hidden function drawPoiPage(dc as Graphics.Dc, w as Number, h as Number, items, state, title as String, dotColor) as Void {
+    hidden function drawMapPage(dc as Graphics.Dc, w as Number, h as Number) as Void {
         var cx = w / 2;
-        var headerH = (h * 0.11).toNumber();
-        dc.setColor(dotColor, dotColor);
+        var headerH = (h * 0.10).toNumber();
+        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_DK_GRAY);
         dc.fillRectangle(0, 0, w, headerH);
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, headerH / 2, Graphics.FONT_TINY, title,
+        dc.drawText(cx, headerH / 2, Graphics.FONT_TINY, "NEARBY MAP",
             Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        if (state.equals("loading")) {
-            dc.drawText(cx, h / 2, Graphics.FONT_SMALL, "Finding nearby...",
-                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            return;
-        }
-        if (state.equals("error")) {
-            dc.drawText(cx, h / 2, Graphics.FONT_SMALL, "Couldn't load",
-                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            return;
-        }
-        if (items == null || items.size() == 0) {
-            dc.drawText(cx, h / 2, Graphics.FONT_SMALL, "None within 3 mi",
-                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
-            return;
-        }
+        if (_mapState.equals("ready") && _mapBitmap != null) {
+            var bw = _mapBitmap.getWidth();
+            var bh = _mapBitmap.getHeight();
+            dc.drawBitmap(cx - bw / 2, headerH + 4, _mapBitmap);
 
-        drawRadar(dc, w, h, items, dotColor);
-        drawNearestList(dc, w, h, items);
+            // Legend.
+            var ly = headerH + 8 + bh + 8;
+            dc.setColor(Graphics.COLOR_BLUE, Graphics.COLOR_TRANSPARENT);
+            dc.fillCircle((w * 0.16).toNumber(), ly, 4);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText((w * 0.21).toNumber(), ly, Graphics.FONT_XTINY, "Restroom",
+                Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
+            dc.fillCircle((w * 0.62).toNumber(), ly, 4);
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText((w * 0.67).toNumber(), ly, Graphics.FONT_XTINY, "Food",
+                Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+        } else if (_mapState.equals("error")) {
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h / 2, Graphics.FONT_SMALL, "Map unavailable",
+                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        } else {
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(cx, h / 2, Graphics.FONT_SMALL, "Loading map...",
+                Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
+        }
     }
 
-    hidden function drawRadar(dc as Graphics.Dc, w as Number, h as Number, items, dotColor) as Void {
+    // ---------- Nearby list page ----------
+
+    hidden function drawListPage(dc as Graphics.Dc, w as Number, h as Number) as Void {
         var cx = w / 2;
-        var rcy = (h * 0.36).toNumber();
-        var R = ((w < h ? w : h) * 0.28).toNumber();
-
-        dc.setPenWidth(1);
-        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawCircle(cx, rcy, R);
-        dc.drawCircle(cx, rcy, R / 2);
-        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, rcy - R - 12, Graphics.FONT_XTINY, "N", Graphics.TEXT_JUSTIFY_CENTER);
-
-        // Farthest item sets the ring scale (min 0.5 mi).
-        var maxMi = 0.5;
-        for (var i = 0; i < items.size(); i++) {
-            var d = poiNum(items[i], "distanceMi");
-            if (d != null && d > maxMi) { maxMi = d; }
-        }
-
-        // Plot each POI by bearing (north-up) and scaled distance.
-        for (var m = 0; m < items.size(); m++) {
-            var it = items[m];
-            var b = poiNum(it, "bearingDeg");
-            var dd = poiNum(it, "distanceMi");
-            if (b == null || dd == null) { continue; }
-            var rad = b * Math.PI / 180.0;
-            var rr = (dd / maxMi) * R;
-            if (rr > R) { rr = R; }
-            var px = cx + rr * Math.sin(rad);
-            var py = rcy - rr * Math.cos(rad);
-            dc.setColor(dotColor, Graphics.COLOR_TRANSPARENT);
-            dc.fillCircle(px.toNumber(), py.toNumber(), 4);
-        }
-
-        // User at center.
+        var headerH = (h * 0.10).toNumber();
+        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_DK_GRAY);
+        dc.fillRectangle(0, 0, w, headerH);
         dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.fillCircle(cx, rcy, 3);
+        dc.drawText(cx, headerH / 2, Graphics.FONT_TINY, "NEARBY",
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
-        // Outer-ring distance label.
-        dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-        var ringLbl = (maxMi >= 1) ? maxMi.format("%.0f") : maxMi.format("%.1f");
-        dc.drawText(cx + R - 2, rcy, Graphics.FONT_XTINY, ringLbl + "mi",
-            Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+        var y = headerH + 14;
+        y = drawPoiRows(dc, w, y, _restrooms, _restroomsState, Graphics.COLOR_BLUE, 3);
+        y = drawPoiRows(dc, w, y, _food, _foodState, Graphics.COLOR_ORANGE, 3);
     }
 
-    hidden function drawNearestList(dc as Graphics.Dc, w as Number, h as Number, items) as Void {
-        var cx = w / 2;
-        var count = items.size();
-        if (count > 3) { count = 3; }
-        var y = (h * 0.66).toNumber();
-        for (var i = 0; i < count; i++) {
+    hidden function drawPoiRows(dc as Graphics.Dc, w as Number, y as Number, items, state, dotColor, maxRows as Number) {
+        if (state.equals("loading")) {
+            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(w / 2, y, Graphics.FONT_XTINY, "Loading...", Graphics.TEXT_JUSTIFY_CENTER);
+            return y + 24;
+        }
+        if (items == null) { return y; }
+        var n = items.size();
+        if (n > maxRows) { n = maxRows; }
+        for (var i = 0; i < n; i++) {
             var it = items[i];
             var name = poiStr(it, "name", "?");
-            if (name.length() > 16) { name = name.substring(0, 15) + "."; }
+            if (name.length() > 14) { name = name.substring(0, 13) + "."; }
             var d = poiNum(it, "distanceMi");
             var dStr = (d == null) ? "" : d.format("%.1f") + "mi";
             var dir = compass(poiNum(it, "bearingDeg"));
+            dc.setColor(dotColor, Graphics.COLOR_TRANSPARENT);
+            dc.fillCircle((w * 0.09).toNumber(), y, 4);
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText(cx, y, Graphics.FONT_XTINY, name + "  " + dStr + " " + dir,
-                Graphics.TEXT_JUSTIFY_CENTER);
-            y += (h * 0.075).toNumber();
+            dc.drawText((w * 0.16).toNumber(), y, Graphics.FONT_XTINY,
+                name + "  " + dStr + " " + dir,
+                Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+            y += 24;
         }
+        if (n == 0 && state.equals("ready")) {
+            dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+            dc.drawText(w / 2, y, Graphics.FONT_XTINY, "None nearby", Graphics.TEXT_JUSTIFY_CENTER);
+            y += 24;
+        }
+        return y;
     }
 
     hidden function drawPageIndicator(dc as Graphics.Dc, w as Number, h as Number) as Void {

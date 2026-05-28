@@ -18,7 +18,6 @@ class RbwApi {
     hidden var _pollTimer;
     hidden var _latStr;       // last coordinates sent (for on-screen diagnostics)
     hidden var _lngStr;
-    hidden var _pendingPoiType;
 
     function initialize(view) {
         _view = view;
@@ -207,15 +206,21 @@ class RbwApi {
         }
     }
 
-    // ---------- Nearby POIs (restrooms / food) ----------
+    // ---------- Nearby POIs (for the list page) ----------
 
-    // type is "restrooms" or "food". Uses the location from the last score fetch.
-    function fetchPoi(type) {
+    function fetchRestrooms() {
+        poiRequest("restrooms", method(:onRestrooms));
+    }
+
+    function fetchFood() {
+        poiRequest("food", method(:onFood));
+    }
+
+    hidden function poiRequest(type, cb) {
         var token = Application.Storage.getValue("token");
         if (token == null || _lat == null || _lng == null) {
             return;
         }
-        _pendingPoiType = type;
         var params = {
             "lat" => coord(_lat),
             "lng" => coord(_lng),
@@ -226,14 +231,36 @@ class RbwApi {
             :headers => { "Authorization" => "Bearer " + token },
             :responseType => Communications.HTTP_RESPONSE_CONTENT_TYPE_JSON
         };
-        Communications.makeWebRequest(baseUrl() + "/api/poi", params, options, method(:onPoi));
+        Communications.makeWebRequest(baseUrl() + "/api/poi", params, options, cb);
     }
 
-    function onPoi(responseCode as Number, data as Null or Dictionary or String or PersistedContent.Iterator) as Void {
+    function onRestrooms(responseCode as Number, data as Null or Dictionary or String or PersistedContent.Iterator) as Void {
         if (responseCode == 200 && data instanceof Dictionary && data.hasKey("items")) {
-            _view.setPoi(_pendingPoiType, data["items"]);
+            _view.setPoi("restrooms", data["items"]);
         } else {
-            _view.setPoiError(_pendingPoiType, responseCode);
+            _view.setPoiError("restrooms", responseCode);
         }
+    }
+
+    function onFood(responseCode as Number, data as Null or Dictionary or String or PersistedContent.Iterator) as Void {
+        if (responseCode == 200 && data instanceof Dictionary && data.hasKey("items")) {
+            _view.setPoi("food", data["items"]);
+        } else {
+            _view.setPoiError("food", responseCode);
+        }
+    }
+
+    // ---------- Mapbox static map (image) ----------
+
+    // Builds the /api/map URL (token in query, since image requests can't send
+    // headers) and hands it to the view to download + draw.
+    function fetchMap() {
+        var token = Application.Storage.getValue("token");
+        if (token == null || _lat == null || _lng == null) {
+            return;
+        }
+        var url = baseUrl() + "/api/map?lat=" + coord(_lat) + "&lng=" + coord(_lng) +
+            "&type=both&zoom=14&w=240&h=240&token=" + token;
+        _view.loadMap(url);
     }
 }

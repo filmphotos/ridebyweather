@@ -31,6 +31,9 @@ const PUBLIC_API_PREFIXES = [
   "/api/device/code",
   "/api/device/poll",
   "/api/device/qr",
+  // Static map image for devices — auth via ?token= (image requests can't
+  // send an Authorization header); the handler verifies it.
+  "/api/map",
 ];
 
 function isPublicApi(pathname: string): boolean {
