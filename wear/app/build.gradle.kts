@@ -71,6 +71,19 @@ dependencies {
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
 
+    // Tiles (swipe-left glanceable card) + ProtoLayout
+    implementation("androidx.wear.tiles:tiles:1.4.1")
+    implementation("androidx.wear.protolayout:protolayout:1.2.1")
+
+    // Watch-face complication data source
+    implementation("androidx.wear.watchface:watchface-complications-data-source-ktx:1.2.1")
+
+    // Background refresh of the cached score for tile/complication
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
+    // Bridges suspend functions to the ListenableFuture that TileService expects
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.8.1")
+
     // Networking + JSON
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")

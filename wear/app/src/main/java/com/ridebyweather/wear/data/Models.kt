@@ -3,6 +3,15 @@ package com.ridebyweather.wear.data
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+/** Locally cached score, rendered by the tile + complication. */
+data class ScoreSnapshot(
+    val score: Int?,
+    val label: String?,
+    val colorHex: String?,
+    val tempF: Int?,
+    val updatedAt: Long,
+)
+
 /** POST /api/auth/login request body. */
 @Serializable
 data class LoginRequest(

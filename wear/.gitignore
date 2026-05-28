@@ -1,0 +1,12 @@
+# Gradle / Android build outputs
+.gradle/
+build/
+app/build/
+local.properties
+*.log
+build-log*.txt
+
+# Android Studio
+.idea/
+*.iml
+captures/

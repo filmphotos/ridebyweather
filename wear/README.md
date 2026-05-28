@@ -99,6 +99,28 @@ device — it installs and launches automatically.
 
 ---
 
+## Tile & complication (heat-risk at a glance)
+
+Beyond the app, the watch exposes two always-glanceable surfaces:
+
+- **Tile** ("Ride Risk") — swipe left from the watch face, then add the tile.
+  Shows the big ride/heat-risk score in its color (red when dangerous), the
+  label, and current temp. Tap it to open the app. Full color control lives
+  here.
+- **Complication** ("Ride Risk") — long-press the watch face → Edit → pick a
+  complication slot → choose **RideByWeather**. Shows the score as short text or
+  a 0–100 dial. (A complication's color is set by the watch-face theme, so the
+  red emphasis is on the Tile, not here.)
+
+Both read a **cached score snapshot** written by the app and by a background
+`WorkManager` job (~every 30 min), so they stay current without you opening the
+app — as long as you've signed in and granted location. Opening the app and
+hitting **Refresh** updates them immediately.
+
+> Background note: reliable background location on Wear may need the
+> "Allow all the time" location setting. If the worker can't get a fix, the
+> tile/complication simply show the last value from when the app was open.
+
 ## What's intentionally NOT on the watch
 
 Route planning, maps, Stripe/checkout, group rides, signup, admin — those stay

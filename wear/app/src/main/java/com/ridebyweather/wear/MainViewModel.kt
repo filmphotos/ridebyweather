@@ -8,6 +8,8 @@ import com.ridebyweather.wear.data.RbwApi
 import com.ridebyweather.wear.data.RideScoreResponse
 import com.ridebyweather.wear.data.SettingsStore
 import com.ridebyweather.wear.location.LocationHelper
+import com.ridebyweather.wear.work.ScoreRefreshWorker
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -90,7 +92,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val bearing = if (loc.hasBearing()) loc.bearing else null
 
             api.rideScore(loc.latitude, loc.longitude, bearing)
-                .onSuccess { res -> _dashboard.update { it.copy(loading = false, score = res, signedIn = true) } }
+                .onSuccess { res ->
+                    _dashboard.update { it.copy(loading = false, score = res, signedIn = true) }
+                    // Cache for the tile/complication and refresh them now.
+                    settings.setScoreSnapshot(
+                        score = res.score?.roundToInt(),
+                        label = res.label,
+                        colorHex = res.color,
+                        tempF = res.weather?.tempF?.roundToInt(),
+                    )
+                    ScoreRefreshWorker.requestGlanceUpdates(getApplication<Application>())
+                }
                 .onFailure { e -> _dashboard.update { it.copy(loading = false, error = e.message ?: "Failed to load") } }
         }
     }
