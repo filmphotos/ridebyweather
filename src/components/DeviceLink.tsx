@@ -7,7 +7,11 @@ type Phase = "checking" | "needLogin" | "ready" | "approving" | "done" | "error"
 
 export default function DeviceLink() {
   const params = useSearchParams();
-  const code = (params.get("code") ?? "").trim().toUpperCase();
+  const urlCode = (params.get("code") ?? "").trim().toUpperCase();
+
+  const [typed, setTyped] = useState("");
+  const [confirmed, setConfirmed] = useState("");
+  const code = urlCode || confirmed;
 
   const [phase, setPhase] = useState<Phase>("checking");
   const [error, setError] = useState<string | null>(null);
@@ -70,9 +74,26 @@ export default function DeviceLink() {
         </div>
 
         {!code && (
-          <p className="text-center text-rose-400">
-            No device code in the link. Re-scan the QR shown on your device.
-          </p>
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+            <p className="text-center text-gray-300 text-sm mb-3">
+              Enter the code shown on your device
+            </p>
+            <input
+              type="text"
+              inputMode="text"
+              autoCapitalize="characters"
+              placeholder="e.g. WTQB38"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              className="w-full rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 text-center text-xl font-mono tracking-widest text-gray-100 placeholder-gray-500 focus:border-sky-500 focus:outline-none"
+            />
+            <button
+              onClick={() => setConfirmed(typed.trim().toUpperCase())}
+              className="mt-3 w-full rounded-lg bg-sky-600 hover:bg-sky-500 py-2.5 font-semibold transition-colors"
+            >
+              Continue
+            </button>
+          </div>
         )}
 
         {code && (
