@@ -54,8 +54,11 @@ class RbwView extends WatchUi.View {
     }
 
     function onTick() as Void {
-        if (_mode.equals("score")) {
-            _api.start();
+        if (!_mode.equals("score")) { return; }
+        if (_page == 1) {
+            _api.fetchMap();   // re-center the map as you ride
+        } else {
+            _api.start();      // refresh score / location
         }
     }
 
@@ -162,8 +165,8 @@ class RbwView extends WatchUi.View {
         _mapState = "loading";
         WatchUi.requestUpdate();
         var options = {
-            :maxWidth => 240,
-            :maxHeight => 240,
+            :maxWidth => 246,
+            :maxHeight => 300,
             :dithering => Communications.IMAGE_DITHERING_NONE
         };
         Communications.makeImageRequest(url, null, options, method(:onMapImage));
@@ -314,32 +317,15 @@ class RbwView extends WatchUi.View {
 
     // ---------- Map page (Mapbox static image) ----------
 
+    // Full-screen riding map: the Mapbox image fills the screen with a small
+    // score badge overlaid so you get map + score in one glance.
     hidden function drawMapPage(dc as Graphics.Dc, w as Number, h as Number) as Void {
         var cx = w / 2;
-        var headerH = (h * 0.10).toNumber();
-        dc.setColor(Graphics.COLOR_DK_GRAY, Graphics.COLOR_DK_GRAY);
-        dc.fillRectangle(0, 0, w, headerH);
-        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-        dc.drawText(cx, headerH / 2, Graphics.FONT_TINY, "NEARBY MAP",
-            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
 
         if (_mapState.equals("ready") && _mapBitmap != null) {
             var bw = _mapBitmap.getWidth();
-            var bh = _mapBitmap.getHeight();
-            dc.drawBitmap(cx - bw / 2, headerH + 4, _mapBitmap);
-
-            // Legend.
-            var ly = headerH + 8 + bh + 8;
-            dc.setColor(Graphics.COLOR_BLUE, Graphics.COLOR_TRANSPARENT);
-            dc.fillCircle((w * 0.16).toNumber(), ly, 4);
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText((w * 0.21).toNumber(), ly, Graphics.FONT_XTINY, "Restroom",
-                Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
-            dc.setColor(Graphics.COLOR_ORANGE, Graphics.COLOR_TRANSPARENT);
-            dc.fillCircle((w * 0.62).toNumber(), ly, 4);
-            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-            dc.drawText((w * 0.67).toNumber(), ly, Graphics.FONT_XTINY, "Food",
-                Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
+            dc.drawBitmap(cx - bw / 2, 0, _mapBitmap);
+            drawScoreBadge(dc);
         } else if (_mapState.equals("error")) {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, h / 2, Graphics.FONT_SMALL, "Map unavailable",
@@ -349,6 +335,18 @@ class RbwView extends WatchUi.View {
             dc.drawText(cx, h / 2, Graphics.FONT_SMALL, "Loading map...",
                 Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
+    }
+
+    // Small colored score circle in the top-left corner, drawn over the map.
+    hidden function drawScoreBadge(dc as Graphics.Dc) as Void {
+        if (_data == null) { return; }
+        var score = gvNum("score");
+        var sStr = (score == null) ? "--" : score.format("%.1f");
+        dc.setColor(_color, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(24, 24, 20);
+        dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(24, 24, Graphics.FONT_TINY, sStr,
+            Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
     }
 
     // ---------- Nearby list page ----------

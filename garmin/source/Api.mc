@@ -260,7 +260,7 @@ class RbwApi {
             return;
         }
         var url = baseUrl() + "/api/map?lat=" + coord(_lat) + "&lng=" + coord(_lng) +
-            "&type=both&zoom=14&w=240&h=240&token=" + token;
+            "&type=both&zoom=15&w=246&h=300&token=" + token;
         _view.loadMap(url);
     }
 }

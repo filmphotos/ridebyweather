@@ -7,6 +7,30 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const maxDuration = 20;
 
+function haversineMi(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 3958.8;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Keep only the N closest places so the map isn't cluttered.
+function nearest<T extends { lat: number; lng: number }>(
+  arr: T[],
+  lat: number,
+  lng: number,
+  n: number
+): T[] {
+  return arr
+    .map((p) => ({ p, d: haversineMi(lat, lng, p.lat, p.lng) }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, n)
+    .map((x) => x.p);
+}
+
 // Returns a Mapbox static-map PNG centered on the device, with restroom +
 // restaurant pins. The device can't render the live map, but it can download
 // and display this image (Connect IQ makeImageRequest).
@@ -35,17 +59,17 @@ export async function GET(req: NextRequest) {
   if (!mbToken) return NextResponse.json({ error: "Map not configured" }, { status: 500 });
 
   const pins: string[] = [];
-  const radiusMi = 2;
+  const radiusMi = 1.5;
   try {
     if (type === "restrooms" || type === "both") {
-      const r = await fetchOsmBathrooms(lat, lng, radiusMi);
-      for (const p of r.slice(0, 12)) {
+      const r = nearest(await fetchOsmBathrooms(lat, lng, radiusMi), lat, lng, 8);
+      for (const p of r) {
         pins.push(`pin-s-toilet+2563eb(${p.lng.toFixed(5)},${p.lat.toFixed(5)})`);
       }
     }
     if (type === "food" || type === "both") {
-      const f = await fetchOsmRestaurants(lat, lng, radiusMi);
-      for (const p of f.slice(0, 12)) {
+      const f = nearest(await fetchOsmRestaurants(lat, lng, radiusMi), lat, lng, 8);
+      for (const p of f) {
         pins.push(`pin-s-restaurant+f97316(${p.lng.toFixed(5)},${p.lat.toFixed(5)})`);
       }
     }
