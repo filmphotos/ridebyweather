@@ -57,17 +57,38 @@ export default function HomePage() {
       {/* Features */}
       <section className="px-4 py-16 sm:py-24 sm:px-6 lg:px-8 bg-gray-900/50">
         <div className="mx-auto max-w-7xl">
-          <h2 className="text-center text-2xl sm:text-3xl font-bold text-white mb-8 sm:mb-12">
-            Everything a cyclist needs to decide
+          <h2 className="text-center text-2xl sm:text-3xl font-bold text-white mb-3">
+            Everything in RideByWeather
           </h2>
+          <p className="text-center text-gray-400 text-sm sm:text-base mb-8 sm:mb-12 max-w-2xl mx-auto">
+            One app for every weather decision — from the Ride Score to air quality, hydration,
+            sun safety, and multi-day tour planning.
+          </p>
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {features.map((f) => (
-              <div key={f.title} className="card">
-                <div className="mb-4 text-4xl">{f.icon}</div>
-                <h3 className="text-lg font-semibold text-white">{f.title}</h3>
-                <p className="mt-2 text-gray-400 text-sm">{f.description}</p>
-              </div>
-            ))}
+            {features.map((f) =>
+              f.href ? (
+                <Link
+                  key={f.title}
+                  href={f.href}
+                  className="card transition-colors hover:border-sky-500/40"
+                >
+                  <div className="mb-4 text-4xl">{f.icon}</div>
+                  <h3 className="text-lg font-semibold text-white">{f.title}</h3>
+                  <p className="mt-2 text-gray-400 text-sm">{f.description}</p>
+                </Link>
+              ) : (
+                <div key={f.title} className="card">
+                  <div className="mb-4 text-4xl">{f.icon}</div>
+                  <h3 className="text-lg font-semibold text-white">{f.title}</h3>
+                  <p className="mt-2 text-gray-400 text-sm">{f.description}</p>
+                </div>
+              )
+            )}
+          </div>
+          <div className="mt-10 text-center">
+            <Link href="/features" className="btn-secondary text-base px-6 py-3">
+              See all features
+            </Link>
           </div>
         </div>
       </section>
@@ -105,34 +126,111 @@ export default function HomePage() {
 
 const features = [
   {
-    icon: "🌬️",
-    title: "Wind-Aware Routing",
-    description: "See headwind/tailwind percentages per route segment. Auto reverse suggestion when wind direction changes.",
-  },
-  {
     icon: "🌡️",
     title: "Ride Score (0–10)",
     description: "Weighted algorithm combining wind, temperature, precipitation, gusts, and humidity into one actionable number.",
+    href: "/cycling",
+  },
+  {
+    icon: "🌬️",
+    title: "Wind-Aware Routing",
+    description: "See headwind/tailwind percentages per route segment. Auto reverse suggestion when wind direction changes.",
+    href: "/cycling",
   },
   {
     icon: "👕",
     title: "Gear Recommendations",
     description: "Weather-based avatar shows exactly what to wear — from base layers to rain jackets.",
-  },
-  {
-    icon: "🗺️",
-    title: "Elevation Charting",
-    description: "Gradient and elevation profiles with per-segment wind analysis for serious route planning.",
+    href: "/cycling",
   },
   {
     icon: "📡",
     title: "Hourly Forecasts",
-    description: "Plan your ride window across the next 48 hours with color-coded Ride Score timeline.",
+    description: "Plan your ride window across the next 48 hours with a color-coded Ride Score timeline.",
+    href: "/cycling",
+  },
+  {
+    icon: "🚲",
+    title: "Bike Type Profiles",
+    description: "Road, gravel, MTB, commuter, or e-bike — the Ride Score retunes to the bike you're riding today.",
+    href: "/cycling",
+  },
+  {
+    icon: "🏃",
+    title: "Multi-Sport",
+    description: "Cycling, running, and walking each get their own dashboard, tuned to the weather that matters for that sport.",
+    href: "/running",
+  },
+  {
+    icon: "🌫️",
+    title: "Air Quality",
+    description: "Live US AQI with PM2.5, ozone, and NO₂ — plus wildfire-smoke and sensitive-group warnings before you head out.",
+    href: "/air-quality",
+  },
+  {
+    icon: "☀️",
+    title: "UV & Sun Safety",
+    description: "Hourly UV index with sunscreen, sleeve, and eyewear prompts when the burn potential spikes.",
+    href: "/sun",
+  },
+  {
+    icon: "🌅",
+    title: "Sunrise / Sunset Planner",
+    description: "Exact daylight and civil-twilight windows, golden hour, and a lights-required reminder for dawn and dusk rides.",
+    href: "/sun",
+  },
+  {
+    icon: "💧",
+    title: "Hydration Coach",
+    description: "Heat index, wet-bulb risk, and humidity-adjusted bottle and electrolyte targets for your planned effort.",
+    href: "/hydration",
+  },
+  {
+    icon: "🗓️",
+    title: "Multi-Day Tour Planner",
+    description: "See a full week of Ride Scores across your route and pack gear for the worst day of the trip.",
+    href: "/tour",
+  },
+  {
+    icon: "⚖️",
+    title: "Compare Locations",
+    description: "Side-by-side Ride Scores for any two cities. Settle the “is it nicer at the coast today” debate in seconds.",
+    href: "/compare",
+  },
+  {
+    icon: "👥",
+    title: "Group Rides",
+    description: "Create or join scheduled rides with a shared Ride Score, RSVP roster, and one-tap calendar export.",
+    href: "/group-rides",
+  },
+  {
+    icon: "🆘",
+    title: "Emergency & Medical",
+    description: "Find the nearest urgent care, hospital, or pharmacy from your current location when a ride goes sideways.",
+    href: "/hospitals",
+  },
+  {
+    icon: "🔥",
+    title: "Heat Acclimation",
+    description: "Track your heat adaptation over a training block so the Ride Score knows how well you handle the heat.",
+    href: "/acclimation",
+  },
+  {
+    icon: "📜",
+    title: "E-Bike Law Reference",
+    description: "State-by-state guide to US e-bike classes, helmet rules, age minimums, and where each class can ride.",
+    href: "/ebike-laws",
+  },
+  {
+    icon: "🎬",
+    title: "Live Ride Mode",
+    description: "A wake-locked ride screen with current conditions, next-hour outlook, and mid-ride wind-shift alerts.",
+    href: "/ride",
   },
   {
     icon: "⌚",
     title: "Garmin & Wahoo Sync",
-    description: "Push weather alerts to your head unit. (Garmin & Wahoo push alerts coming soon)",
+    description: "Push weather alerts to your head unit and Wear OS watch. (Garmin & Wahoo push alerts coming soon)",
   },
 ];
 
