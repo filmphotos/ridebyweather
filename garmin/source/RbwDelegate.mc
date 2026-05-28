@@ -1,7 +1,12 @@
 import Toybox.WatchUi;
 import Toybox.Lang;
 
-// Maps the primary button (watches) and screen taps (Edge/touch) to a refresh.
+// Edge button mapping:
+//   START  -> start / stop recording the ride
+//   UP     -> zoom in (map page) / previous page
+//   DOWN   -> zoom out (map page) / next page
+//   LAP    -> cycle pages (Score -> Map -> List) — never get stuck on the map
+//   BACK   -> exit (default)
 class RbwDelegate extends WatchUi.BehaviorDelegate {
 
     hidden var _view;
@@ -11,24 +16,21 @@ class RbwDelegate extends WatchUi.BehaviorDelegate {
         _view = view;
     }
 
-    function onSelect() as Boolean {
-        _view.triggerRefresh();
-        return true;
-    }
-
-    function onTap(evt as WatchUi.ClickEvent) as Boolean {
-        _view.triggerRefresh();
-        return true;
-    }
-
-    // Up/Down buttons on the Edge page between Score / Restrooms / Food.
-    function onNextPage() as Boolean {
-        _view.nextPage();
-        return true;
-    }
-
-    function onPreviousPage() as Boolean {
-        _view.prevPage();
-        return true;
+    function onKey(evt as WatchUi.KeyEvent) as Boolean {
+        var key = evt.getKey();
+        if (key == WatchUi.KEY_ENTER) {
+            _view.toggleRecording();
+            return true;
+        } else if (key == WatchUi.KEY_UP) {
+            _view.onUp();
+            return true;
+        } else if (key == WatchUi.KEY_DOWN) {
+            _view.onDown();
+            return true;
+        } else if (key == WatchUi.KEY_LAP) {
+            _view.cyclePage();
+            return true;
+        }
+        return false;
     }
 }

@@ -4,6 +4,8 @@ import Toybox.Lang;
 import Toybox.Communications;
 import Toybox.Timer;
 import Toybox.Math;
+import Toybox.ActivityRecording;
+import Toybox.Activity;
 
 // Display modes:
 //   "status"  - centered message (GPS, errors); optional 2nd line
@@ -29,6 +31,11 @@ class RbwView extends WatchUi.View {
     hidden var _foodState = "idle";
     hidden var _mapBitmap = null;
     hidden var _mapState = "idle";
+    hidden var _zoom = 15;
+
+    // Ride recording
+    hidden var _session = null;
+    hidden var _recording = false;
 
     hidden var _api;
     hidden var _refreshTimer;
@@ -56,9 +63,9 @@ class RbwView extends WatchUi.View {
     function onTick() as Void {
         if (!_mode.equals("score")) { return; }
         if (_page == 1) {
-            _api.fetchMap();   // re-center the map as you ride
+            _api.fetchMap(_zoom);   // re-center the map as you ride
         } else {
-            _api.start();      // refresh score / location
+            _api.start();           // refresh score / location
         }
     }
 
@@ -144,10 +151,59 @@ class RbwView extends WatchUi.View {
         WatchUi.requestUpdate();
     }
 
+    // Up/Down: zoom on the map page, change page elsewhere.
+    function onUp() as Void {
+        if (!_mode.equals("score")) { return; }
+        if (_page == 1) { zoomIn(); } else { prevPage(); }
+    }
+
+    function onDown() as Void {
+        if (!_mode.equals("score")) { return; }
+        if (_page == 1) { zoomOut(); } else { nextPage(); }
+    }
+
+    // Lap button: always cycle pages (so you're never stuck on the map).
+    function cyclePage() as Void {
+        nextPage();
+    }
+
+    hidden function zoomIn() as Void {
+        if (_zoom < 16) { _zoom += 1; }
+        _mapState = "loading";
+        _api.fetchMap(_zoom);
+        WatchUi.requestUpdate();
+    }
+
+    hidden function zoomOut() as Void {
+        if (_zoom > 11) { _zoom -= 1; }
+        _mapState = "loading";
+        _api.fetchMap(_zoom);
+        WatchUi.requestUpdate();
+    }
+
+    // Start / stop recording a real Garmin activity (saved + synced to Connect).
+    function toggleRecording() as Void {
+        if (!(Toybox has :ActivityRecording)) { return; }
+        if (_session != null && _session.isRecording()) {
+            _session.stop();
+            _session.save();
+            _session = null;
+            _recording = false;
+        } else {
+            _session = ActivityRecording.createSession({
+                :name => "RideByWeather",
+                :sport => Activity.SPORT_CYCLING
+            });
+            _session.start();
+            _recording = true;
+        }
+        WatchUi.requestUpdate();
+    }
+
     hidden function onPageEnter() as Void {
         if (_page == 1 && _mapState.equals("idle")) {
             _mapState = "loading";
-            _api.fetchMap();
+            _api.fetchMap(_zoom);
         } else if (_page == 2) {
             if (_restroomsState.equals("idle")) {
                 _restroomsState = "loading";
@@ -200,6 +256,9 @@ class RbwView extends WatchUi.View {
                 drawDashboard(dc, w, h);
             }
             drawPageIndicator(dc, w, h);
+            if (_recording) {
+                drawRecIndicator(dc, w);
+            }
         } else {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             var y1 = (_status2 == null) ? (h / 2) : (h * 0.42);
@@ -322,10 +381,16 @@ class RbwView extends WatchUi.View {
     hidden function drawMapPage(dc as Graphics.Dc, w as Number, h as Number) as Void {
         var cx = w / 2;
 
-        if (_mapState.equals("ready") && _mapBitmap != null) {
+        // Keep showing the current map while a zoom/recenter reloads.
+        if (_mapBitmap != null) {
             var bw = _mapBitmap.getWidth();
             dc.drawBitmap(cx - bw / 2, 0, _mapBitmap);
             drawScoreBadge(dc);
+            // Zoom level + loading hint, bottom-left.
+            dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+            var z = "z" + _zoom.toString();
+            if (_mapState.equals("loading")) { z += " ..."; }
+            dc.drawText(6, h - 22, Graphics.FONT_XTINY, z, Graphics.TEXT_JUSTIFY_LEFT);
         } else if (_mapState.equals("error")) {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
             dc.drawText(cx, h / 2, Graphics.FONT_SMALL, "Map unavailable",
@@ -335,6 +400,14 @@ class RbwView extends WatchUi.View {
             dc.drawText(cx, h / 2, Graphics.FONT_SMALL, "Loading map...",
                 Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
         }
+    }
+
+    hidden function drawRecIndicator(dc as Graphics.Dc, w as Number) as Void {
+        dc.setColor(Graphics.COLOR_RED, Graphics.COLOR_TRANSPARENT);
+        dc.fillCircle(w - 30, 12, 5);
+        dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+        dc.drawText(w - 22, 12, Graphics.FONT_XTINY, "REC",
+            Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER);
     }
 
     // Small colored score circle in the top-left corner, drawn over the map.

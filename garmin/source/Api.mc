@@ -254,13 +254,13 @@ class RbwApi {
 
     // Builds the /api/map URL (token in query, since image requests can't send
     // headers) and hands it to the view to download + draw.
-    function fetchMap() {
+    function fetchMap(zoom) {
         var token = Application.Storage.getValue("token");
         if (token == null || _lat == null || _lng == null) {
             return;
         }
         var url = baseUrl() + "/api/map?lat=" + coord(_lat) + "&lng=" + coord(_lng) +
-            "&type=both&zoom=15&w=246&h=300&token=" + token;
+            "&type=both&zoom=" + zoom.toString() + "&w=246&h=300&token=" + token;
         _view.loadMap(url);
     }
 }
