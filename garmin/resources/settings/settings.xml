@@ -1,0 +1,7 @@
+<settings>
+    <!-- Optional: override the backend URL. Login is handled on-device via the
+         QR pairing flow, so no email/password is stored here. -->
+    <setting propertyKey="@Properties.baseUrl" title="@Strings.SettingBaseUrl">
+        <settingConfig type="alphaNumeric" />
+    </setting>
+</settings>

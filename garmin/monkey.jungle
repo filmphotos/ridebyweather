@@ -1,0 +1,3 @@
+# Connect IQ build config. Sources default to ./source and resources to
+# ./resources, so only the manifest needs declaring here.
+project.manifest = manifest.xml

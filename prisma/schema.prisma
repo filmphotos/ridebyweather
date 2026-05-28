@@ -237,6 +237,23 @@ model DeviceIntegration {
   @@map("device_integrations")
 }
 
+// Short-lived records for the device-pairing ("show a QR, approve on phone")
+// login flow used by the Garmin / Wear OS apps.
+model DevicePairing {
+  id           String    @id @default(cuid())
+  code         String    @unique              // user-facing code, embedded in the QR URL
+  deviceSecret String    @unique              // opaque secret the device polls with
+  status       String    @default("pending")  // pending | approved | consumed
+  token        String?                        // issued JWT, set on approval
+  userId       String?                        // who approved it
+  deviceLabel  String?                        // optional label (e.g. "edge540")
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+
+  @@index([deviceSecret])
+  @@map("device_pairings")
+}
+
 model PartnerListing {
   id          String    @id @default(cuid())
   name        String

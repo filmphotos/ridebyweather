@@ -1,0 +1,11 @@
+# Connect IQ build outputs
+bin/
+gen/
+*.prg
+*.iq
+*.debug.xml
+
+# Developer signing key — NEVER commit this
+developer_key
+*.der
+*.pem
