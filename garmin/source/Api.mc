@@ -201,8 +201,9 @@ class RbwApi {
             Application.Storage.deleteValue("token");
             _view.setStatus("Sign-in expired - press to retry");
         } else {
-            // Show the coordinates we sent so we can diagnose a 400 directly.
-            _view.setStatus2("Err " + responseCode, _latStr + ", " + _lngStr);
+            // Network/connectivity error (often the phone locked / Garmin
+            // Connect suspended). Keep the last good data on screen.
+            _view.onDataError(responseCode);
         }
     }
 

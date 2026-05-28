@@ -37,6 +37,10 @@ class RbwView extends WatchUi.View {
     hidden var _session = null;
     hidden var _recording = false;
 
+    // True when the last refresh failed (e.g. phone locked / no signal) but we
+    // still have older data worth showing.
+    hidden var _stale = false;
+
     hidden var _api;
     hidden var _refreshTimer;
 
@@ -112,8 +116,20 @@ class RbwView extends WatchUi.View {
     function setScore(d) as Void {
         _mode = "score";
         _data = d;
+        _stale = false;
         _color = parseColor(d.hasKey("color") ? d["color"] : null);
         WatchUi.requestUpdate();
+    }
+
+    // A data request failed. Keep showing the last good data (flagged stale)
+    // rather than blanking the screen; only surface an error if we have nothing.
+    function onDataError(code) as Void {
+        if (_data != null) {
+            _stale = true;
+            WatchUi.requestUpdate();
+        } else {
+            setStatus2("No data", "check phone signal");
+        }
     }
 
     function setPoi(type, items) as Void {
@@ -258,6 +274,11 @@ class RbwView extends WatchUi.View {
             drawPageIndicator(dc, w, h);
             if (_recording) {
                 drawRecIndicator(dc, w);
+            }
+            if (_stale) {
+                dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
+                dc.drawText(w / 2, h * 0.90, Graphics.FONT_XTINY, "no phone signal",
+                    Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER);
             }
         } else {
             dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
