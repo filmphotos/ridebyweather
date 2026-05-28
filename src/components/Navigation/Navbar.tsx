@@ -19,6 +19,7 @@ const toolItems = [
   { label: "Ride Score", href: "/ride-score" },
   { label: "Run Score", href: "/run-score" },
   { label: "Walk Score", href: "/walk-score" },
+  { label: "Ride History", href: "/ride/history" },
   { label: "Hourly Forecast", href: "/forecast" },
   { label: "Gear Recommendations", href: "/gear" },
   { label: "Route & Wind Planner", href: "/routes" },
@@ -306,10 +307,11 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile nav panel */}
+      {/* Mobile nav panel — scrollable and padded for the device safe area so the
+          longer Tools list isn't cut off behind the system nav bar. */}
       {mobileNavOpen && (
-        <div className="md:hidden border-t border-gray-800 bg-gray-950/95 backdrop-blur">
-          <div className="px-4 py-3 flex flex-col gap-1">
+        <div className="md:hidden border-t border-gray-800 bg-gray-950/95 backdrop-blur max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain">
+          <div className="px-4 py-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col gap-1">
             {navItems.map((item) => (
               <Link
                 key={item.href}
