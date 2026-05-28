@@ -314,17 +314,17 @@ const detailedFeatures = [
 // Each advertised feature maps to the page that actually delivers it. Features
 // without an entry (e.g. Device Integrations) are genuinely not live yet.
 const featureLinks: Record<string, string> = {
-  "Ride Score (0–10)": "/cycling",
-  "Wind-Aware Routing": "/cycling",
-  "Gear Recommendations": "/cycling",
-  "Hourly Forecast Timeline": "/cycling",
-  "Route Planning & Elevation": "/cycling",
+  "Ride Score (0–10)": "/ride-score",
+  "Wind-Aware Routing": "/routes",
+  "Gear Recommendations": "/gear",
+  "Hourly Forecast Timeline": "/forecast",
+  "Route Planning & Elevation": "/routes",
   "Group Rides": "/group-rides",
   "Multi-Sport Support": "/running",
   "E-Bike Law Reference": "/ebike-laws",
   "Storm Push Alerts": "/settings",
   "Live Ride Mode": "/ride",
-  "Bike Shop & Partner Map": "/cycling",
+  "Bike Shop & Partner Map": "/bike-shops",
   "Auto-Located Forecast": "/cycling",
   "Units & Preferences": "/settings",
   "Emergency & Medical Lookups": "/hospitals",
@@ -334,7 +334,7 @@ const featureLinks: Record<string, string> = {
   "Heat Index & Hydration Coach": "/hydration",
   "Multi-Day Tour Planner": "/tour",
   "Compare Two Locations": "/compare",
-  "Bike Type Profiles": "/cycling",
+  "Bike Type Profiles": "/bike-profiles",
   "Calendar Sync for Group Rides": "/group-rides",
   "Installable PWA": "/cycling",
 };

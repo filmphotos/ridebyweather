@@ -16,6 +16,14 @@ const navItems = [
 ];
 
 const toolItems = [
+  { label: "Ride Score", href: "/ride-score" },
+  { label: "Run Score", href: "/run-score" },
+  { label: "Walk Score", href: "/walk-score" },
+  { label: "Hourly Forecast", href: "/forecast" },
+  { label: "Gear Recommendations", href: "/gear" },
+  { label: "Route & Wind Planner", href: "/routes" },
+  { label: "Bike Type Profiles", href: "/bike-profiles" },
+  { label: "Bike Shops & Partners", href: "/bike-shops" },
   { label: "Compare Locations", href: "/compare" },
   { label: "Tour Planner", href: "/tour" },
   { label: "Air Quality", href: "/air-quality" },
@@ -134,8 +142,8 @@ export default function Navbar() {
                 <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd" />
               </svg>
             </button>
-            <div className="absolute right-0 top-full hidden w-48 pt-1 group-hover:block">
-              <div className="rounded-xl border border-gray-800 bg-gray-900 shadow-xl overflow-hidden py-1">
+            <div className="absolute right-0 top-full hidden w-56 pt-1 group-hover:block">
+              <div className="rounded-xl border border-gray-800 bg-gray-900 shadow-xl overflow-y-auto max-h-[75vh] py-1">
                 {toolItems.map((item) => (
                   <Link
                     key={item.href}
