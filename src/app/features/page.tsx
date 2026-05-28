@@ -108,9 +108,8 @@ const detailedFeatures = [
     title: "Device Integrations",
     tagline: "Your head unit. Your wrist. Your call.",
     description:
-      "Sync rides from Strava today. Push live weather and storm alerts to Garmin and Wahoo head units soon.",
+      "Push live weather and storm alerts to Garmin and Wahoo head units soon.",
     bullets: [
-      "Strava ride history sync",
       "Garmin & Wahoo push alerts (coming soon)",
       "Storm warning push notifications",
     ],
@@ -163,19 +162,6 @@ const detailedFeatures = [
       "Mid-ride wind-shift detection",
       "Big-touch UI for jersey pockets",
     ],
-  },
-  {
-    icon: "📜",
-    title: "Ride History & Strava Import",
-    tagline: "Replay the weather you actually rode in.",
-    description:
-      "Pull your past Strava rides and overlay the historical weather. See whether that PR was earned in a tailwind or fought through gusts.",
-    bullets: [
-      "One-click Strava OAuth",
-      "Historical weather replay per ride",
-      "Tag rides as solo, group, or commute",
-    ],
-    proBadge: true,
   },
   {
     icon: "🏪",
@@ -328,7 +314,7 @@ const detailedFeatures = [
 const faqs = [
   {
     q: "Do I need to pay to use RideByWeather?",
-    a: "No. The Free tier is forever-free and covers the basic Ride Score, current forecast, gear avatar, group rides, e-bike law lookups, and 3 saved routes. Pro ($9/mo) unlocks the wind-aware routing engine, the 48-hour timeline, and Strava history replay.",
+    a: "No. The Free tier is forever-free and covers the basic Ride Score, current forecast, gear avatar, group rides, e-bike law lookups, and 3 saved routes. Pro ($9/mo) unlocks the wind-aware routing engine and the 48-hour timeline.",
   },
   {
     q: "How accurate is the Ride Score?",
@@ -336,7 +322,7 @@ const faqs = [
   },
   {
     q: "Which devices and services integrate?",
-    a: "Strava sync is live today. Garmin and Wahoo head-unit push alerts are in active development. Push notifications work on iOS 16.4+, Android, and desktop. The PWA installs to your home screen — no app store required.",
+    a: "Garmin and Wahoo head-unit push alerts are in active development. Push notifications work on iOS 16.4+, Android, and desktop. The PWA installs to your home screen — no app store required.",
   },
   {
     q: "Can I use this for running or walking?",
@@ -359,7 +345,6 @@ const proFeatures = [
   "Auto reverse route suggestion",
   "Unlimited saved routes",
   "Garmin & Wahoo push alerts (coming soon)",
-  "Strava sync",
   "Historical weather replay",
 ];
 

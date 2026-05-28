@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import StormAlertsToggle from "@/components/Notifications/StormAlertsToggle";
 
 interface Prefs {
@@ -12,12 +12,6 @@ interface Prefs {
   dislikeWind: boolean;
   temperatureMin: number | null;
   temperatureMax: number | null;
-}
-
-interface StravaStatus {
-  configured: boolean;
-  connected: boolean;
-  athleteName?: string | null;
 }
 
 const DEFAULT: Prefs = {
@@ -44,15 +38,11 @@ export default function SettingsClient() {
 
 function SettingsInner() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
-  const [strava, setStrava] = useState<StravaStatus>({ configured: false, connected: false });
-  const [stravaMsg, setStravaMsg] = useState<string | null>(null);
-  const [stravaLoading, setStravaLoading] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -67,28 +57,7 @@ function SettingsInner() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-
-    fetch("/api/strava/status")
-      .then((r) => r.json())
-      .then(setStrava)
-      .catch(() => {});
-
-    const stravaParam = searchParams.get("strava");
-    if (stravaParam === "connected") setStravaMsg("Strava connected successfully!");
-    else if (stravaParam === "denied") setStravaMsg("Strava connection cancelled.");
-    else if (stravaParam === "error") setStravaMsg("Strava connection failed. Please try again.");
-  }, [router, searchParams]);
-
-  async function handleStravaDisconnect() {
-    setStravaLoading(true);
-    try {
-      await fetch("/api/strava/disconnect", { method: "DELETE" });
-      setStrava((s) => ({ ...s, connected: false, athleteName: null }));
-      setStravaMsg("Strava disconnected.");
-    } finally {
-      setStravaLoading(false);
-    }
-  }
+  }, [router]);
 
   function set<K extends keyof Prefs>(key: K, value: Prefs[K]) {
     setPrefs((p) => ({ ...p, [key]: value }));
@@ -225,51 +194,6 @@ function SettingsInner() {
         {/* Notifications */}
         <Section title="Notifications">
           <StormAlertsToggle />
-        </Section>
-
-        {/* Connected Apps */}
-        <Section title="Connected Apps">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <svg viewBox="0 0 24 24" className="w-6 h-6 fill-orange-500 flex-shrink-0" xmlns="http://www.w3.org/2000/svg">
-                <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066l-2.084 4.116z" />
-                <path d="M11.094 13.828l2.089 4.116 2.08-4.116H20.6L15.387 3 10.18 13.828h.914z" />
-              </svg>
-              <div>
-                <p className="text-sm font-medium text-gray-200">Strava</p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {!strava.configured
-                    ? "Not configured — add STRAVA_CLIENT_ID to enable"
-                    : strava.connected
-                    ? `Connected${strava.athleteName ? ` as ${strava.athleteName}` : ""}`
-                    : "Import your rides and runs as routes"}
-                </p>
-              </div>
-            </div>
-            {strava.configured && (
-              strava.connected ? (
-                <button
-                  onClick={handleStravaDisconnect}
-                  disabled={stravaLoading}
-                  className="flex-shrink-0 text-sm px-4 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 disabled:opacity-50 transition-colors"
-                >
-                  {stravaLoading ? "…" : "Disconnect"}
-                </button>
-              ) : (
-                <a
-                  href="/api/strava/connect"
-                  className="flex-shrink-0 text-sm px-4 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white font-medium transition-colors"
-                >
-                  Connect
-                </a>
-              )
-            )}
-          </div>
-          {stravaMsg && (
-            <p className={`text-xs mt-2 ${stravaMsg.includes("success") ? "text-emerald-400" : "text-gray-400"}`}>
-              {stravaMsg}
-            </p>
-          )}
         </Section>
 
         {/* Change password */}

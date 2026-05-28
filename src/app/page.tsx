@@ -131,8 +131,8 @@ const features = [
   },
   {
     icon: "⌚",
-    title: "Garmin & Strava Sync",
-    description: "Push weather alerts to your head unit. Sync ride history from Strava and Wahoo. (Garmin & Wahoo push alerts coming soon)",
+    title: "Garmin & Wahoo Sync",
+    description: "Push weather alerts to your head unit. (Garmin & Wahoo push alerts coming soon)",
   },
 ];
 

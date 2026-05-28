@@ -43,7 +43,6 @@ const plans = [
       "Auto reverse route suggestion",
       "Unlimited saved routes",
       "Garmin & Wahoo push alerts (coming soon)",
-      "Strava sync",
       "Historical weather replay",
     ],
     limitations: [],

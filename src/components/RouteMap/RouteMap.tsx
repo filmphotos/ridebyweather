@@ -4,7 +4,6 @@ import { useState, useCallback, useMemo, useEffect } from "react";
 import { Map, Source, Layer, Marker, NavigationControl } from "react-map-gl/mapbox";
 import type { MapMouseEvent } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
-import StravaImport from "@/components/Strava/StravaImport";
 import ElevationProfile from "@/components/RouteMap/ElevationProfile";
 import { fetchPartners } from "@/lib/partnersClient";
 
@@ -162,9 +161,6 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph, sport = "
   const [showSaved, setShowSaved] = useState(false);
   const [savedRoutes, setSavedRoutes] = useState<SavedRoute[]>([]);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
-  const [showStravaImport, setShowStravaImport] = useState(false);
-  const [stravaConnected, setStravaConnected] = useState(false);
-
   // Restaurants overlay
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [showRestaurants, setShowRestaurants] = useState(true);
@@ -185,10 +181,6 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph, sport = "
     fetch("/api/auth/me")
       .then((r) => r.json())
       .then((d) => setIsLoggedIn(!!d.user))
-      .catch(() => {});
-    fetch("/api/strava/status")
-      .then((r) => r.json())
-      .then((d) => setStravaConnected(!!d.connected))
       .catch(() => {});
   }, []);
 
@@ -476,19 +468,6 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph, sport = "
           <div className="px-4 py-2.5 border-b border-gray-700 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">Saved Routes</span>
             <div className="flex items-center gap-2">
-              {stravaConnected && (
-                <button
-                  onClick={() => setShowStravaImport(true)}
-                  className="flex items-center gap-1 text-xs text-orange-400 hover:text-orange-300 font-medium transition-colors"
-                  title="Import from Strava"
-                >
-                  <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-orange-400" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066l-2.084 4.116z" />
-                    <path d="M11.094 13.828l2.089 4.116 2.08-4.116H20.6L15.387 3 10.18 13.828h.914z" />
-                  </svg>
-                  Import
-                </button>
-              )}
               <button onClick={() => setShowSaved(false)} className="text-gray-600 hover:text-gray-400">
                 <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
@@ -841,16 +820,6 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph, sport = "
         </p>
       )}
 
-      {showStravaImport && (
-        <StravaImport
-          onImported={() => {
-            setShowStravaImport(false);
-            fetchSavedRoutes();
-            if (!showSaved) setShowSaved(true);
-          }}
-          onClose={() => setShowStravaImport(false)}
-        />
-      )}
     </div>
   );
 }

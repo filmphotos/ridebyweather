@@ -21,7 +21,6 @@ const PUBLIC_API_PREFIXES = [
   "/api/auth/reset-password",
   "/api/admin/me",
   "/api/stripe/webhook",
-  "/api/strava/callback",
   // Cron endpoint — authenticates with CRON_SECRET in the handler, no user cookie.
   "/api/push/check-storms",
 ];

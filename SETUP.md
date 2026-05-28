@@ -137,7 +137,6 @@ Edit `server.url` in `capacitor.config.ts` (e.g. point at a staging deploy), the
 - [ ] Auth (NextAuth.js + JWT)
 - [ ] Route drawing on Mapbox map
 - [ ] Per-segment headwind/tailwind visualization
-- [ ] Strava OAuth integration
 - [ ] Running score page
 - [ ] Admin dashboard
 - [ ] Garmin Connect IQ data push

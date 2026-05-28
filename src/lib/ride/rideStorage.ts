@@ -86,7 +86,7 @@ export function rideToGpx(ride: RideRecord): string {
       return `<trkpt lat="${p.lat}" lon="${p.lng}">${ele}<time>${time}</time></trkpt>`;
     })
     .join("");
-  // GPX waypoints for stops — most tools (Strava, Garmin Connect) will show them
+  // GPX waypoints for stops — most tools (Garmin Connect) will show them
   const wpts = (ride.stops ?? [])
     .map((s) => {
       const time = new Date(s.t).toISOString();
