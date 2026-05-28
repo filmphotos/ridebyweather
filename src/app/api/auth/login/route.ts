@@ -33,6 +33,9 @@ export async function POST(req: NextRequest) {
     const res = NextResponse.json({
       user: { id: user.id, email: user.email, name: user.name },
       tier: user.subscription?.tier ?? "free",
+      // Returned for non-browser clients (Wear OS / bike computer) that can't use
+      // the httpOnly cookie. Web clients ignore this and rely on the cookie below.
+      token,
     });
     res.cookies.set("rbw_token", token, {
       httpOnly: true,

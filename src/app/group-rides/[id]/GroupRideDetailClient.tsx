@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { buildIcs, downloadIcs } from "@/lib/calendar";
 
 interface RideDetail {
   id: string;
@@ -147,6 +148,26 @@ export default function GroupRideDetailClient({ id }: { id: string }) {
     } catch {
       // ignore
     }
+  }
+
+  function addToCalendar() {
+    if (!ride) return;
+    const url = `${window.location.origin}/group-rides/${id}`;
+    const descParts = [ride.description ?? ""];
+    if (ride.distanceMi != null) descParts.push(`Distance: ${ride.distanceMi} mi`);
+    if (ride.pace) descParts.push(`Pace: ${ride.pace}`);
+    if (forecast) descParts.push(`Forecast Ride Score at start: ${forecast.score.toFixed(1)} (${forecast.label})`);
+    descParts.push(url);
+    const ics = buildIcs({
+      uid: ride.id,
+      title: ride.name,
+      description: descParts.filter(Boolean).join("\n"),
+      location: ride.locationName,
+      start: new Date(ride.startTime),
+      durationMin: 120,
+      url,
+    });
+    downloadIcs(ride.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "group-ride", ics);
   }
 
   if (loading) {
@@ -336,6 +357,14 @@ export default function GroupRideDetailClient({ id }: { id: string }) {
               >
                 {copied ? "✓ Copied" : "Copy share link"}
               </button>
+              {!isPast && (
+                <button
+                  onClick={addToCalendar}
+                  className="flex-1 rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-300 hover:bg-gray-800 transition-colors"
+                >
+                  📅 Add to calendar
+                </button>
+              )}
               {ride.isCreator && !isPast && (
                 <button
                   onClick={cancelRide}

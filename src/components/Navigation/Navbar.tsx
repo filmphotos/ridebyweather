@@ -11,10 +11,19 @@ const navItems = [
   { label: "Walking", href: "/walking" },
   { label: "Ride", href: "/ride" },
   { label: "Group Rides", href: "/group-rides" },
-  { label: "Acclimation", href: "/acclimation" },
-  { label: "E-Bike Laws", href: "/ebike-laws" },
   { label: "Features", href: "/features" },
   { label: "Pricing", href: "/pricing" },
+];
+
+const toolItems = [
+  { label: "Compare Locations", href: "/compare" },
+  { label: "Tour Planner", href: "/tour" },
+  { label: "Air Quality", href: "/air-quality" },
+  { label: "Sun & UV", href: "/sun" },
+  { label: "Hydration", href: "/hydration" },
+  { label: "Acclimation", href: "/acclimation" },
+  { label: "E-Bike Laws", href: "/ebike-laws" },
+  { label: "Medical Near Me", href: "/hospitals" },
 ];
 
 interface AuthUser {
@@ -109,6 +118,41 @@ export default function Navbar() {
               {item.label}
             </Link>
           ))}
+
+          {/* Tools dropdown */}
+          <div className="relative group">
+            <button
+              className={cn(
+                "flex items-center gap-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+                toolItems.some((t) => pathname?.startsWith(t.href))
+                  ? "bg-sky-500/20 text-sky-400"
+                  : "text-gray-400 hover:text-gray-100 hover:bg-gray-800"
+              )}
+            >
+              Tools
+              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+              </svg>
+            </button>
+            <div className="absolute right-0 top-full hidden w-48 pt-1 group-hover:block">
+              <div className="rounded-xl border border-gray-800 bg-gray-900 shadow-xl overflow-hidden py-1">
+                {toolItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "block px-4 py-2 text-sm transition-colors",
+                      pathname?.startsWith(item.href)
+                        ? "bg-sky-500/15 text-sky-400"
+                        : "text-gray-300 hover:bg-gray-800 hover:text-gray-100"
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Auth area */}
@@ -272,6 +316,25 @@ export default function Navbar() {
                 {item.label}
               </Link>
             ))}
+
+            <div className="mt-1 px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-600 border-t border-gray-800">
+              Tools
+            </div>
+            {toolItems.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                  pathname?.startsWith(item.href)
+                    ? "bg-sky-500/20 text-sky-400"
+                    : "text-gray-300 hover:text-white hover:bg-gray-800"
+                )}
+              >
+                {item.label}
+              </Link>
+            ))}
+
             {!user && (
               <Link
                 href="/login"

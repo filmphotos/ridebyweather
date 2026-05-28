@@ -44,6 +44,7 @@ export async function GET(req: NextRequest) {
           windDirDeg: f.weather.windDirDeg,
           precipProb: f.weather.precipProb,
           condition: f.weather.condition,
+          uvIndex: f.weather.uvIndex ?? 0,
         },
       };
     });

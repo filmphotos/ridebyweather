@@ -22,9 +22,39 @@ export async function GET(req: NextRequest) {
   const parsed = QuerySchema.safeParse(params);
   if (!parsed.success) return NextResponse.json({ results: [] });
 
+  const q = parsed.data.q.trim();
+
+  // Open-Meteo's geocoder doesn't index US ZIPs reliably. Route 5-digit input
+  // through Zippopotam.us (free, no key, no auth) so ZIP lookups actually work.
+  if (/^\d{5}$/.test(q)) {
+    try {
+      const res = await fetch(`https://api.zippopotam.us/us/${q}`, {
+        next: { revalidate: 86400 },
+      });
+      if (res.ok) {
+        const data = (await res.json()) as ZippopotamResult;
+        const place = data.places?.[0];
+        if (place) {
+          const city = place["place name"];
+          const state = place["state abbreviation"];
+          const result: GeoResult = {
+            name: city,
+            display: `${city}, ${state} ${data["post code"]}`,
+            lat: parseFloat(place.latitude),
+            lng: parseFloat(place.longitude),
+            country: "US",
+          };
+          return NextResponse.json({ results: [result] });
+        }
+      }
+    } catch {
+      // fall through to Open-Meteo
+    }
+  }
+
   try {
     const res = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(parsed.data.q)}&count=6&language=en&format=json`,
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=6&language=en&format=json`,
       { next: { revalidate: 3600 } }
     );
     if (!res.ok) return NextResponse.json({ results: [] });
@@ -42,6 +72,17 @@ export async function GET(req: NextRequest) {
   } catch {
     return NextResponse.json({ results: [] });
   }
+}
+
+interface ZippopotamResult {
+  "post code": string;
+  country: string;
+  places: Array<{
+    "place name": string;
+    "state abbreviation": string;
+    latitude: string;
+    longitude: string;
+  }>;
 }
 
 interface OpenMeteoResult {

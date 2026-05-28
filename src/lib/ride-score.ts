@@ -1,3 +1,5 @@
+import { getBikeProfile, adjustWindScore, adjustTempScore, type BikeType } from "./bikeProfiles";
+
 export interface WeatherInput {
   tempF: number;
   feelsLikeF: number;
@@ -154,7 +156,8 @@ function humidityScore(humidity: number, tempF: number): number {
 // Main cycling Ride Score function
 export function computeCyclingScore(
   weather: WeatherInput,
-  segments?: RouteWindSegment[]
+  segments?: RouteWindSegment[],
+  bikeType?: BikeType
 ): RideScoreResult {
   // Safety override: storms or ice → cap at 3
   if (weather.isStorm || weather.isIce) {
@@ -207,8 +210,17 @@ export function computeCyclingScore(
     windRaw = Math.max(0, 10 - Math.max(weather.windSpeedMph - 10, 0) * 0.4);
   }
 
-  const windScore = Math.min(10, Math.max(0, windRaw));
-  const tempScore = tempScoreCycling(weather.tempF);
+  let windScore = Math.min(10, Math.max(0, windRaw));
+  let tempScore = tempScoreCycling(weather.tempF);
+
+  // Bike-type retuning: road bikes feel wind more, MTB/e-bikes less; e-bikes lose
+  // range in the cold.
+  const bikeProfile = getBikeProfile(bikeType);
+  if (bikeProfile) {
+    windScore = adjustWindScore(windScore, bikeProfile);
+    tempScore = adjustTempScore(tempScore, weather.tempF, bikeProfile);
+  }
+
   const precipS = precipScore(weather.precipProb, weather.precipInch);
   const gustS = gustScore(weather.windSpeedMph, weather.windGustMph);
   const humS = humidityScore(weather.humidity, weather.tempF);

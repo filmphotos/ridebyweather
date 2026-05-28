@@ -11,10 +11,30 @@ export interface HourlyForecast {
   weather: WeatherInput;
 }
 
+// Daily aggregates — used by the multi-day tour planner and sunrise/sunset planner.
+// sunrise/sunset are ISO strings in the location's *local* time (no timezone suffix),
+// so display code must format the clock portion directly rather than via Date tz math.
+export interface DailyForecast {
+  date: Date;
+  tempMaxF: number;
+  tempMinF: number;
+  precipProb: number; // 0-1
+  windSpeedMaxMph: number;
+  windGustMaxMph: number;
+  windDirDeg: number;
+  uvIndexMax: number;
+  sunrise: string;
+  sunset: string;
+  condition: string;
+  isStorm: boolean;
+  isIce: boolean;
+}
+
 // Abstract provider interface — swap OpenWeather for Tomorrow.io, Pirateweather, etc.
 export interface WeatherProvider {
   getCurrentWeather(loc: WeatherLocation): Promise<WeatherInput>;
   getHourlyForecast(loc: WeatherLocation, hours?: number): Promise<HourlyForecast[]>;
+  getDailyForecast(loc: WeatherLocation, days?: number): Promise<DailyForecast[]>;
 }
 
 // OpenWeatherMap implementation
@@ -46,6 +66,36 @@ class OpenWeatherProvider implements WeatherProvider {
       timestamp: new Date(h.dt * 1000),
       weather: this.mapHourlyWeather(h),
     }));
+  }
+
+  async getDailyForecast(loc: WeatherLocation, days = 7): Promise<DailyForecast[]> {
+    const res = await fetch(
+      `${this.baseUrl}/onecall?lat=${loc.lat}&lon=${loc.lng}&exclude=minutely,hourly,alerts&appid=${this.apiKey}&units=imperial`
+    );
+    if (!res.ok) throw new Error(`Weather API error: ${res.status}`);
+    const data = await res.json();
+    const tzOffset = data.timezone_offset ?? 0; // seconds
+    const toLocalIso = (unix: number) =>
+      new Date((unix + tzOffset) * 1000).toISOString().slice(0, 16);
+
+    return (data.daily ?? []).slice(0, days).map((d: OWMDaily) => {
+      const conditionId = d.weather[0]?.id ?? 800;
+      return {
+        date: new Date(d.dt * 1000),
+        tempMaxF: d.temp.max,
+        tempMinF: d.temp.min,
+        precipProb: d.pop ?? 0,
+        windSpeedMaxMph: d.wind_speed,
+        windGustMaxMph: d.wind_gust ?? d.wind_speed,
+        windDirDeg: d.wind_deg,
+        uvIndexMax: d.uvi ?? 0,
+        sunrise: toLocalIso(d.sunrise),
+        sunset: toLocalIso(d.sunset),
+        condition: d.weather[0]?.main?.toLowerCase() ?? "clear",
+        isStorm: conditionId >= 200 && conditionId < 300,
+        isIce: conditionId >= 600 && conditionId < 700 && d.temp.min < 34,
+      };
+    });
   }
 
   private mapCurrentWeather(current: OWMCurrent, nextHour?: OWMHourly): WeatherInput {
@@ -154,6 +204,38 @@ class OpenMeteoProvider implements WeatherProvider {
     }));
   }
 
+  async getDailyForecast(loc: WeatherLocation, days = 7): Promise<DailyForecast[]> {
+    const dailyVars = [
+      "temperature_2m_max", "temperature_2m_min", "precipitation_probability_max",
+      "wind_speed_10m_max", "wind_gusts_10m_max", "wind_direction_10m_dominant",
+      "uv_index_max", "sunrise", "sunset", "weather_code",
+    ].join(",");
+    const url = `${this.baseUrl(loc)}&daily=${dailyVars}&forecast_days=${days}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Open-Meteo error: ${res.status}`);
+    const data = await res.json();
+    const d = data.daily;
+    return (d.time as string[]).slice(0, days).map((t, i) => {
+      const tmin = d.temperature_2m_min[i] ?? 50;
+      const m = this.mapCode(d.weather_code[i] ?? 0, tmin);
+      return {
+        date: new Date(t),
+        tempMaxF: d.temperature_2m_max[i] ?? 60,
+        tempMinF: tmin,
+        precipProb: (d.precipitation_probability_max[i] ?? 0) / 100,
+        windSpeedMaxMph: d.wind_speed_10m_max[i] ?? 0,
+        windGustMaxMph: d.wind_gusts_10m_max[i] ?? 0,
+        windDirDeg: d.wind_direction_10m_dominant[i] ?? 0,
+        uvIndexMax: d.uv_index_max[i] ?? 0,
+        sunrise: d.sunrise[i] as string,
+        sunset: d.sunset[i] as string,
+        condition: m.condition,
+        isStorm: m.isStorm,
+        isIce: m.isIce,
+      };
+    });
+  }
+
   private mapCode(code: number, tempF: number): { condition: string; isStorm: boolean; isIce: boolean } {
     const isStorm = code >= 95;
     const isSnow = (code >= 71 && code <= 77) || code === 85 || code === 86;
@@ -203,6 +285,29 @@ export class MockWeatherProvider implements WeatherProvider {
       },
     }));
   }
+
+  async getDailyForecast(_loc: WeatherLocation, days = 7): Promise<DailyForecast[]> {
+    const day = 86400 * 1000;
+    return Array.from({ length: days }, (_, i) => {
+      const date = new Date(Date.now() + i * day);
+      const dateStr = date.toISOString().slice(0, 10);
+      return {
+        date,
+        tempMaxF: 70 + Math.sin(i / 2) * 8,
+        tempMinF: 50 + Math.sin(i / 2) * 5,
+        precipProb: Math.max(0, 0.2 + Math.sin(i) * 0.2),
+        windSpeedMaxMph: 8 + Math.abs(Math.sin(i)) * 6,
+        windGustMaxMph: 14 + Math.abs(Math.sin(i)) * 8,
+        windDirDeg: (200 + i * 20) % 360,
+        uvIndexMax: 5 + Math.sin(i / 2) * 3,
+        sunrise: `${dateStr}T06:02`,
+        sunset: `${dateStr}T20:14`,
+        condition: i % 3 === 0 ? "clouds" : "clear",
+        isStorm: false,
+        isIce: false,
+      };
+    });
+  }
 }
 
 // Factory — Open-Meteo is default (free, no key). OpenWeather used if key is set.
@@ -230,4 +335,17 @@ interface OWMCurrent {
 
 interface OWMHourly extends OWMCurrent {
   pop: number;
+}
+
+interface OWMDaily {
+  dt: number;
+  sunrise: number;
+  sunset: number;
+  temp: { min: number; max: number };
+  wind_speed: number;
+  wind_gust?: number;
+  wind_deg: number;
+  pop?: number;
+  uvi?: number;
+  weather: { id: number; main: string; description: string }[];
 }

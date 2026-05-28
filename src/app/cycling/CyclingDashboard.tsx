@@ -9,6 +9,7 @@ import WeatherCard from "@/components/WeatherCard/WeatherCard";
 import WeatherAvatar from "@/components/WeatherAvatar/WeatherAvatar";
 import ForecastTimeline from "@/components/Forecast/ForecastTimeline";
 import NearbyPartners from "@/components/Partners/NearbyPartners";
+import { BIKE_PROFILES, type BikeType } from "@/lib/bikeProfiles";
 import type { GeoResult } from "@/app/api/geocode/route";
 
 const RouteMap = dynamic(() => import("@/components/RouteMap/RouteMap"), { ssr: false });
@@ -50,15 +51,31 @@ export default function CyclingDashboard() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gender, setGender] = useState<"male" | "female">("male");
+  const [bike, setBike] = useState<BikeType>("road");
+  // Ref keeps the latest bike for fetchRideScore without changing its identity
+  // (which would re-trigger location detection).
+  const bikeRef = useRef<BikeType>("road");
 
   useEffect(() => {
     const saved = localStorage.getItem("rbw_gender");
     if (saved === "male" || saved === "female") setGender(saved);
+    const savedBike = localStorage.getItem("rbw_bike");
+    if (savedBike && BIKE_PROFILES.some((b) => b.id === savedBike)) {
+      setBike(savedBike as BikeType);
+      bikeRef.current = savedBike as BikeType;
+    }
   }, []);
 
   const updateGender = (g: "male" | "female") => {
     setGender(g);
     localStorage.setItem("rbw_gender", g);
+  };
+
+  const updateBike = (b: BikeType) => {
+    setBike(b);
+    bikeRef.current = b;
+    localStorage.setItem("rbw_bike", b);
+    if (location) fetchRideScore(location.lat, location.lng);
   };
 
   // Geocode search state
@@ -73,7 +90,7 @@ export default function CyclingDashboard() {
     if (!opts?.silent) setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/ride-score?lat=${lat}&lng=${lng}`);
+      const res = await fetch(`/api/ride-score?lat=${lat}&lng=${lng}&bikeType=${bikeRef.current}`);
       if (!res.ok) throw new Error("Failed to fetch ride score");
       setData(await res.json());
       setFetchedAt(Date.now());
@@ -204,6 +221,24 @@ export default function CyclingDashboard() {
               >
                 Female
               </button>
+            </div>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-gray-500">Bike:</span>
+            <div className="inline-flex flex-wrap rounded-lg border border-gray-800 bg-gray-900 p-0.5 text-xs">
+              {BIKE_PROFILES.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => updateBike(b.id)}
+                  title={b.blurb}
+                  className={`px-2.5 py-1 rounded-md transition-colors ${
+                    bike === b.id ? "bg-sky-500 text-white" : "text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  {b.emoji} {b.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>

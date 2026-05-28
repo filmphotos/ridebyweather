@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">RideByWeather</string>
+    <string name="title_activity_main">RideByWeather</string>
+    <string name="package_name">com.ridebyweather.app</string>
+    <string name="custom_url_scheme">com.ridebyweather.app</string>
+</resources>

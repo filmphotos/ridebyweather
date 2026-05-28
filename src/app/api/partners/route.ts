@@ -12,7 +12,7 @@ import { fetchOsmMedical } from "@/lib/osmMedical";
 import { fetchOsmRestaurants } from "@/lib/osmRestaurants";
 import { fetchOsmBathrooms } from "@/lib/osmBathrooms";
 import { fetchRefugeBathrooms } from "@/lib/refugeRestrooms";
-import { verifyToken } from "@/lib/auth";
+import { getAuthPayload } from "@/lib/auth";
 
 // Always run fresh — don't serve a stale cached payload that might still
 // contain pre-fix hospital entries.
@@ -64,8 +64,7 @@ function haversineMi(lat1: number, lng1: number, lat2: number, lng2: number): nu
 }
 
 export async function GET(req: NextRequest) {
-  const token = req.cookies.get("rbw_token")?.value;
-  const payload = token ? await verifyToken(token) : null;
+  const payload = await getAuthPayload(req);
   if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);

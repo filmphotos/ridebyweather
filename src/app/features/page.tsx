@@ -311,6 +311,34 @@ const detailedFeatures = [
   },
 ];
 
+// Each advertised feature maps to the page that actually delivers it. Features
+// without an entry (e.g. Device Integrations) are genuinely not live yet.
+const featureLinks: Record<string, string> = {
+  "Ride Score (0–10)": "/cycling",
+  "Wind-Aware Routing": "/cycling",
+  "Gear Recommendations": "/cycling",
+  "Hourly Forecast Timeline": "/cycling",
+  "Route Planning & Elevation": "/cycling",
+  "Group Rides": "/group-rides",
+  "Multi-Sport Support": "/running",
+  "E-Bike Law Reference": "/ebike-laws",
+  "Storm Push Alerts": "/settings",
+  "Live Ride Mode": "/ride",
+  "Bike Shop & Partner Map": "/cycling",
+  "Auto-Located Forecast": "/cycling",
+  "Units & Preferences": "/settings",
+  "Emergency & Medical Lookups": "/hospitals",
+  "Air Quality Monitoring": "/air-quality",
+  "UV Index & Sun Safety": "/sun",
+  "Sunrise / Sunset Planner": "/sun",
+  "Heat Index & Hydration Coach": "/hydration",
+  "Multi-Day Tour Planner": "/tour",
+  "Compare Two Locations": "/compare",
+  "Bike Type Profiles": "/cycling",
+  "Calendar Sync for Group Rides": "/group-rides",
+  "Installable PWA": "/cycling",
+};
+
 const faqs = [
   {
     q: "Do I need to pay to use RideByWeather?",
@@ -436,29 +464,51 @@ export default function FeaturesPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {detailedFeatures.map((f) => (
-              <div key={f.title} className="card flex flex-col">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="text-4xl">{f.icon}</div>
-                  {f.proBadge && (
-                    <span className="inline-flex items-center rounded-full bg-sky-500/15 border border-sky-500/30 px-2 py-0.5 text-[10px] font-bold text-sky-400 uppercase tracking-wide">
-                      Pro
-                    </span>
+            {detailedFeatures.map((f) => {
+              const href = featureLinks[f.title];
+              return (
+                <div
+                  key={f.title}
+                  className={`card flex flex-col ${href ? "transition-colors hover:border-sky-500/40" : ""}`}
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="text-4xl">{f.icon}</div>
+                    <div className="flex items-center gap-1.5">
+                      {f.proBadge && (
+                        <span className="inline-flex items-center rounded-full bg-sky-500/15 border border-sky-500/30 px-2 py-0.5 text-[10px] font-bold text-sky-400 uppercase tracking-wide">
+                          Pro
+                        </span>
+                      )}
+                      {!href && (
+                        <span className="inline-flex items-center rounded-full bg-gray-800 border border-gray-700 px-2 py-0.5 text-[10px] font-bold text-gray-400 uppercase tracking-wide">
+                          Soon
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <h3 className="text-lg font-semibold text-white">{f.title}</h3>
+                  <p className="mt-1 text-sm font-medium text-sky-400">{f.tagline}</p>
+                  <p className="mt-3 text-sm text-gray-400">{f.description}</p>
+                  <ul className="mt-4 space-y-1.5 flex-1">
+                    {f.bullets.map((b) => (
+                      <li key={b} className="flex items-start gap-2 text-xs text-gray-300">
+                        <span className="text-green-400 mt-0.5">✓</span>
+                        {b}
+                      </li>
+                    ))}
+                  </ul>
+                  {href && (
+                    <Link
+                      href={href}
+                      className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-sky-400 hover:text-sky-300"
+                    >
+                      Open feature
+                      <span aria-hidden>→</span>
+                    </Link>
                   )}
                 </div>
-                <h3 className="text-lg font-semibold text-white">{f.title}</h3>
-                <p className="mt-1 text-sm font-medium text-sky-400">{f.tagline}</p>
-                <p className="mt-3 text-sm text-gray-400">{f.description}</p>
-                <ul className="mt-4 space-y-1.5 flex-1">
-                  {f.bullets.map((b) => (
-                    <li key={b} className="flex items-start gap-2 text-xs text-gray-300">
-                      <span className="text-green-400 mt-0.5">✓</span>
-                      {b}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>

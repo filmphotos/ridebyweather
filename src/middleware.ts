@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyToken } from "@/lib/auth";
+import { getTokenFromRequest, verifyToken } from "@/lib/auth";
 
 const PUBLIC_PAGES = new Set<string>([
   "/",
@@ -39,7 +39,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = req.cookies.get("rbw_token")?.value;
+  const token = getTokenFromRequest(req);
   const payload = token ? await verifyToken(token) : null;
   if (payload) return NextResponse.next();
 

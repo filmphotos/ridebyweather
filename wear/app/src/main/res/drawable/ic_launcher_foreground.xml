@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Simple sun glyph centered in the 72dp safe zone. -->
+    <group android:translateX="0" android:translateY="0">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M54,40 a14,14 0 1 0 0.01,0 z" />
+        <!-- rays -->
+        <path android:fillColor="#FFFFFF" android:pathData="M52,20 h4 v10 h-4 z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M52,78 h4 v10 h-4 z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M20,52 h10 v4 h-10 z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M78,52 h10 v4 h-10 z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M30,30 l3,-3 l7,7 l-3,3 z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M68,68 l3,-3 l7,7 l-3,3 z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M71,30 l3,3 l-7,7 l-3,-3 z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M33,71 l3,3 l-7,7 l-3,-3 z" />
+    </group>
+</vector>
