@@ -3,7 +3,14 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { deleteRide, downloadGpx, loadRides, type RideRecord } from "@/lib/ride/rideStorage";
+import {
+  deleteRide,
+  downloadGpx,
+  loadRideDetail,
+  loadRides,
+  syncRidesFromServer,
+  type RideRecord,
+} from "@/lib/ride/rideStorage";
 import { fmtDuration } from "@/lib/ride/rideMath";
 import RidePhotos from "@/components/RidePhotos/RidePhotos";
 
@@ -12,10 +19,29 @@ const RideRouteMap = dynamic(() => import("./RideRouteMap"), { ssr: false });
 export default function RideHistory() {
   const [rides, setRides] = useState<RideRecord[]>([]);
   const [selected, setSelected] = useState<RideRecord | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
+    // Instant first paint from the local cache, then sync with the server
+    // (uploads any local-only rides and pulls down rides recorded on other
+    // devices). Server is the source of truth; cache is just for offline.
     setRides(loadRides());
+    setSyncing(true);
+    syncRidesFromServer()
+      .then((merged) => setRides(merged))
+      .finally(() => setSyncing(false));
   }, []);
+
+  async function openRide(ride: RideRecord) {
+    // List entries from the server come without `points` — lazy-load the
+    // full track so the route map can render.
+    if (!ride.points || ride.points.length === 0) {
+      const full = await loadRideDetail(ride.id);
+      setSelected(full ?? ride);
+      return;
+    }
+    setSelected(ride);
+  }
 
   function handleDelete(id: string) {
     if (!confirm("Delete this ride?")) return;
@@ -29,7 +55,9 @@ export default function RideHistory() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Ride History</h1>
-          <p className="text-sm text-gray-500 mt-1">Stored locally on this device.</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {syncing ? "Syncing…" : "Synced across your devices."}
+          </p>
         </div>
         <Link href="/ride" className="btn-primary text-sm px-4 py-2">Start New Ride</Link>
       </div>
@@ -46,7 +74,7 @@ export default function RideHistory() {
           {rides.map((ride) => (
             <button
               key={ride.id}
-              onClick={() => setSelected(ride)}
+              onClick={() => openRide(ride)}
               className="card text-left hover:border-sky-500/40 transition-colors"
             >
               <div className="text-xs text-gray-500">

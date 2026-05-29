@@ -29,6 +29,7 @@ model User {
   liveSessions      LiveSession[]
   emergencyContacts EmergencyContact[]
   roadClosures      RoadClosure[]
+  rides             Ride[]
 
   @@map("users")
 }
@@ -325,6 +326,41 @@ model RoadClosure {
   @@index([lat, lng])
   @@index([status, expiresAt])
   @@map("road_closures")
+}
+
+// Completed rides — synced from the client so the user's history shows on
+// every device they log into (phone + PC). Client generates the id, so re-syncs
+// are idempotent. The heavy GPS track lives in `points` (JSON); the list
+// endpoint omits it to keep responses small.
+model Ride {
+  id            String   @id                      // client-generated, e.g. "ride_<startedAtMs>"
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  startedAt     DateTime
+  endedAt       DateTime
+  sport         String   @default("cycling")
+
+  totalDistMi   Float
+  movingTimeSec Int
+  totalTimeSec  Int
+  avgSpeedMph   Float
+  maxSpeedMph   Float
+  ascentFt      Float
+  descentFt     Float
+  avgHrBpm      Int?
+  maxHrBpm      Int?
+  notes         String?
+
+  points        String   @default("[]")   // JSON TrackPoint[]
+  laps          String   @default("[]")   // JSON laps
+  stops         String   @default("[]")   // JSON stops
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, startedAt])
+  @@map("rides")
 }
 
 model PartnerListing {
