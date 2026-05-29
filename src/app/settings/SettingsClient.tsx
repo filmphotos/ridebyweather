@@ -196,6 +196,11 @@ function SettingsInner() {
           <StormAlertsToggle />
         </Section>
 
+        {/* Emergency contacts */}
+        <Section title="Emergency Contacts">
+          <EmergencyContacts />
+        </Section>
+
         {/* Change password */}
         <Section title="Account">
           <ChangePasswordForm />
@@ -377,6 +382,168 @@ function ChangePasswordForm() {
         {busy ? "Updating…" : "Change password"}
       </button>
     </form>
+  );
+}
+
+interface Contact {
+  id: string;
+  name: string;
+  relation: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+function EmergencyContacts() {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [name, setName] = useState("");
+  const [relation, setRelation] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    fetch("/api/emergency-contacts")
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.contacts)) setContacts(d.contacts);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    setErr("");
+    if (!name.trim()) {
+      setErr("Name is required.");
+      return;
+    }
+    if (!email.trim() && !phone.trim()) {
+      setErr("Add an email or a phone number.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch("/api/emergency-contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          relation: relation.trim() || null,
+          email: email.trim() || null,
+          phone: phone.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErr(data.details?.formErrors?.[0] || data.error || "Couldn't save contact.");
+        return;
+      }
+      setContacts((c) => [...c, data.contact]);
+      setName("");
+      setRelation("");
+      setEmail("");
+      setPhone("");
+    } catch {
+      setErr("Network error. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string) {
+    const prev = contacts;
+    setContacts((c) => c.filter((x) => x.id !== id));
+    try {
+      const res = await fetch(`/api/emergency-contacts/${id}`, { method: "DELETE" });
+      if (!res.ok) setContacts(prev);
+    } catch {
+      setContacts(prev);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-gray-500">
+        The SOS button on the live ride screen emails these people your last known location
+        and a link to follow you live.
+      </p>
+
+      {loading ? (
+        <div className="h-5 w-5 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+      ) : contacts.length > 0 ? (
+        <ul className="space-y-2">
+          {contacts.map((c) => (
+            <li
+              key={c.id}
+              className="flex items-center justify-between gap-3 rounded-lg bg-gray-800/60 px-3 py-2.5"
+            >
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-gray-200 truncate">
+                  {c.name}
+                  {c.relation && <span className="ml-2 text-xs text-gray-500">{c.relation}</span>}
+                </div>
+                <div className="text-xs text-gray-500 truncate">
+                  {[c.email, c.phone].filter(Boolean).join(" · ") || "—"}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => remove(c.id)}
+                className="text-gray-500 hover:text-red-400 text-xs flex-shrink-0"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-gray-500">No emergency contacts yet.</p>
+      )}
+
+      <form onSubmit={add} className="space-y-2 border-t border-gray-800 pt-4">
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            type="text"
+            placeholder="Name (e.g. Sarah)"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+          />
+          <input
+            type="text"
+            placeholder="Relation (e.g. Wife)"
+            value={relation}
+            onChange={(e) => setRelation(e.target.value)}
+            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+          />
+          <input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+          />
+          <input
+            type="tel"
+            placeholder="Phone (optional)"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+          />
+        </div>
+        {err && <p className="text-red-400 text-xs">{err}</p>}
+        <button
+          type="submit"
+          disabled={busy}
+          className="bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg border border-gray-700 transition-colors"
+        >
+          {busy ? "Adding…" : "Add contact"}
+        </button>
+      </form>
+    </div>
   );
 }
 

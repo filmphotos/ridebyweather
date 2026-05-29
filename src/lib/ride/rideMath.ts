@@ -8,6 +8,7 @@ export interface TrackPoint {
   altM?: number;      // raw GPS altitude (m)
   heading?: number;   // degrees
   accuracy?: number;  // meters (horizontal)
+  hrBpm?: number;     // heart rate (bpm) from a paired BLE strap, if connected
 }
 
 export const MS_TO_MPH = 2.23694;
@@ -64,4 +65,62 @@ export function altDeltaFt(prevAltM: number, currAltM: number, minStepM: number 
   if (Math.abs(deltaM) < minStepM) return { ascent: 0, descent: 0 };
   const ft = deltaM * M_TO_FT;
   return ft > 0 ? { ascent: ft, descent: 0 } : { ascent: 0, descent: -ft };
+}
+
+// Average altitude (m) over a +/- radius window around idx, ignoring missing values.
+function avgAltM(points: TrackPoint[], idx: number, radius: number): number | null {
+  let sum = 0;
+  let count = 0;
+  for (let j = idx - radius; j <= idx + radius; j++) {
+    const a = points[j]?.altM;
+    if (a != null) { sum += a; count++; }
+  }
+  return count > 0 ? sum / count : null;
+}
+
+// Live road grade as a percent, estimated from recent GPS points.
+// GPS altitude is noisy (±3–5 m), so we measure over a horizontal window
+// (default ≥80 m) and average the endpoint altitudes to mute jitter.
+// Returns null when there isn't enough recent, altitude-bearing data.
+export function liveGradePct(
+  points: TrackPoint[],
+  opts?: { minSpanM?: number; maxAgeMs?: number }
+): number | null {
+  const minSpanM = opts?.minSpanM ?? 80;
+  const maxAgeMs = opts?.maxAgeMs ?? 30000;
+  const n = points.length;
+  if (n < 3) return null;
+  const last = points[n - 1];
+  if (last.altM == null) return null;
+
+  // Walk backwards accumulating horizontal distance until we span minSpanM
+  // (or run out of recent points).
+  let i = n - 1;
+  let horizM = 0;
+  while (i > 0) {
+    const a = points[i - 1];
+    if (last.t - a.t > maxAgeMs) break;
+    horizM += haversineM(a.lat, a.lng, points[i].lat, points[i].lng);
+    i--;
+    if (horizM >= minSpanM) break;
+  }
+  if (horizM < Math.min(minSpanM, 30)) return null;
+
+  const startAlt = avgAltM(points, i, 2);
+  const endAlt = avgAltM(points, n - 1, 2);
+  if (startAlt == null || endAlt == null) return null;
+
+  const grade = ((endAlt - startAlt) / horizM) * 100;
+  if (!Number.isFinite(grade)) return null;
+  return Math.max(-40, Math.min(40, grade));
+}
+
+// Tailwind text color for a grade %, matched to the climb-severity palette.
+export function gradeColorClass(gradePct: number): string {
+  const g = Math.abs(gradePct);
+  if (gradePct < -2) return "text-sky-400";      // descending
+  if (g < 3) return "text-gray-300";             // flat-ish
+  if (gradePct < 6) return "text-yellow-400";
+  if (gradePct < 9) return "text-orange-400";
+  return "text-red-400";                         // brutal
 }

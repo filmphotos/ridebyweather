@@ -9,7 +9,9 @@ import {
   altDeltaFt,
   bearingDeg,
   fmtDuration,
+  gradeColorClass,
   haversineM,
+  liveGradePct,
   MS_TO_MPH,
   M_TO_FT,
   M_TO_MI,
@@ -19,12 +21,14 @@ import {
 } from "@/lib/ride/rideMath";
 import { saveRide, type RideRecord, type RideSport, type RideStop, type RideStopType } from "@/lib/ride/rideStorage";
 import { addPhoto, requestPersistence } from "@/lib/photos/photoStore";
+import { useBleSensors } from "@/lib/ride/useBleSensors";
+import { useActivityReminders, type ReminderMode, type ReminderRule } from "@/lib/ride/useActivityReminders";
 import type { GeoResult } from "@/app/api/geocode/route";
 import WeatherAvatar from "@/components/WeatherAvatar/WeatherAvatar";
 
 const RideMap = dynamic(() => import("./RideMap"), { ssr: false });
 
-type Tab = "stats" | "map" | "weather";
+type Tab = "stats" | "map" | "weather" | "devices";
 type State = "idle" | "recording" | "paused" | "ended";
 
 const SPORTS: Array<{ id: RideSport; label: string; emoji: string; verb: string; noun: string }> = [
@@ -71,6 +75,7 @@ const WEATHER_MOVE_THRESHOLD_M = 1500;             // OR after moving >1.5 km
 const AUTO_PAUSE_SPEED_MS = 0.45;                  // ~1 mph
 const AUTO_PAUSE_AFTER_S = 12;
 const NEW_LAP_DIST_MI = 1;                         // auto-lap each mile
+const LIVE_PING_MS = 8000;                         // push live-share position at most this often
 
 export default function LiveRide() {
   // --- state --------------------------------------------------------------
@@ -154,6 +159,22 @@ export default function LiveRide() {
   useEffect(() => { pointsRef.current = points; }, [points]);
 
   const wakeLock = useWakeLock(state === "recording" || state === "paused");
+
+  // Live accumulators in display units — also fed to the reminder engine.
+  const distMi = totalDistM * M_TO_MI;
+  const elapsedRefNow = state === "ended" && endedAtRef.current ? endedAtRef.current : now;
+  const totalElapsedSec = startedAtRef.current ? (elapsedRefNow - startedAtRef.current) / 1000 : 0;
+
+  // Bluetooth sensors (heart-rate strap, Varia radar, e-bike) + fuel reminders.
+  const sensors = useBleSensors();
+  const reminders = useActivityReminders(state === "recording", totalElapsedSec, distMi);
+
+  // Mirror live HR into a ref so the geolocation callback can stamp each point.
+  const hrRef = useRef<number | null>(null);
+  useEffect(() => { hrRef.current = sensors.hr.bpm; }, [sensors.hr.bpm]);
+
+  const updateReminder = (kind: "drink" | "eat", patch: Partial<ReminderRule>) =>
+    reminders.setPrefs({ ...reminders.prefs, [kind]: { ...reminders.prefs[kind], ...patch } });
 
   // Quick photo capture — saves to IndexedDB scoped to the current ride id.
   const photoInputRef = useRef<HTMLInputElement>(null);
@@ -345,6 +366,7 @@ export default function LiveRide() {
         altM: altitude ?? undefined,
         heading: heading ?? undefined,
         accuracy: accuracy ?? undefined,
+        hrBpm: hrRef.current ?? undefined,
       };
 
       setPoints((prevPoints) => [...prevPoints, newPoint]);
@@ -390,6 +412,25 @@ export default function LiveRide() {
           setLaps(next);
         }
       }
+
+      // Live-share ping — throttled; only while a share is active.
+      if (shareTokenRef.current && t - lastPingTRef.current > LIVE_PING_MS) {
+        lastPingTRef.current = t;
+        const elapsed = startedAtRef.current ? Math.round((t - startedAtRef.current) / 1000) : 0;
+        fetch("/api/live/ping", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            token: shareTokenRef.current,
+            lat,
+            lng,
+            speedMph: (derivedSpeedMs ?? 0) * MS_TO_MPH,
+            headingDeg: heading != null ? ((heading % 360) + 360) % 360 : undefined,
+            distanceMi: totalDistMRef.current * M_TO_MI,
+            elapsedSec: elapsed,
+          }),
+        }).catch(() => {});
+      }
     },
     [autoPause, maybeRefreshWeather]
   );
@@ -402,6 +443,8 @@ export default function LiveRide() {
   const maxSpeedRef = useRef(0);
   const lapsRef = useRef<Array<{ t: number; distMi: number }>>([]);
   const stopsRef = useRef<RideStop[]>([]);
+  const shareTokenRef = useRef<string | null>(null);
+  const lastPingTRef = useRef(0);
 
   const markStop = useCallback((type: RideStopType) => {
     const last = pointsRef.current[pointsRef.current.length - 1];
@@ -475,6 +518,91 @@ export default function LiveRide() {
     lastWeatherFetchRef.current = null;
   };
 
+  // --- live sharing + SOS -------------------------------------------------
+  const [shareState, setShareState] = useState<"idle" | "starting" | "active" | "error">("idle");
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [sosState, setSosState] = useState<"idle" | "sending" | "sent" | "error" | "none">("idle");
+
+  const startShare = useCallback(async () => {
+    setShareState("starting");
+    try {
+      const res = await fetch("/api/live/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sport }),
+      });
+      if (!res.ok) throw new Error();
+      const d = await res.json();
+      shareTokenRef.current = d.token;
+      setShareUrl(d.watchUrl);
+      setShareState("active");
+      lastPingTRef.current = 0; // push on the next GPS fix
+    } catch {
+      setShareState("error");
+    }
+  }, [sport]);
+
+  const endShareIfActive = useCallback(() => {
+    const tok = shareTokenRef.current;
+    shareTokenRef.current = null;
+    setShareState("idle");
+    setShareUrl(null);
+    if (tok) {
+      fetch("/api/live/ping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: tok, ended: true }),
+      }).catch(() => {});
+    }
+  }, []);
+
+  const copyShareLink = useCallback(async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2000);
+    } catch {}
+  }, [shareUrl]);
+
+  const shareLink = useCallback(async () => {
+    if (!shareUrl) return;
+    const nav = navigator as Navigator & { share?: (d: { title?: string; url?: string }) => Promise<void> };
+    if (nav.share) {
+      try {
+        await nav.share({ title: "Follow my ride live", url: shareUrl });
+        return;
+      } catch {}
+    }
+    copyShareLink();
+  }, [shareUrl, copyShareLink]);
+
+  const triggerSos = useCallback(async () => {
+    const cur = pointsRef.current[pointsRef.current.length - 1];
+    let lat = cur?.lat;
+    let lng = cur?.lng;
+    if (lat == null || lng == null) {
+      const wl = weatherLocRef.current;
+      if (wl) { lat = wl.lat; lng = wl.lng; }
+    }
+    if (lat == null || lng == null) { setSosState("error"); return; }
+    if (!window.confirm("Send an emergency SOS to your contacts with your current location?")) return;
+    setSosState("sending");
+    try {
+      const res = await fetch("/api/sos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lat, lng, token: shareTokenRef.current ?? undefined }),
+      });
+      if (!res.ok) { setSosState(res.status === 400 ? "none" : "error"); return; }
+      setSosState("sent");
+      setTimeout(() => setSosState("idle"), 6000);
+    } catch {
+      setSosState("error");
+    }
+  }, []);
+
   // --- controls -----------------------------------------------------------
   const start = () => {
     setError(null);
@@ -530,6 +658,7 @@ export default function LiveRide() {
   const end = () => {
     const endedAt = Date.now();
     endedAtRef.current = endedAt;
+    endShareIfActive();
 
     if (!startedAtRef.current || pointsRef.current.length < 2) {
       // Nothing worth saving — go back to idle but keep the GPS watch alive
@@ -544,8 +673,11 @@ export default function LiveRide() {
     stopWatch();
     const startedAt = startedAtRef.current;
     const totalTimeSec = (endedAt - startedAt) / 1000;
-    const distMi = totalDistMRef.current * M_TO_MI;
-    const avgMph = movingTimeRef.current > 0 ? (totalDistMRef.current / movingTimeRef.current) * MS_TO_MPH : 0;
+    const rideDistMi = totalDistMRef.current * M_TO_MI;
+    const rideAvgMph = movingTimeRef.current > 0 ? (totalDistMRef.current / movingTimeRef.current) * MS_TO_MPH : 0;
+    const hrSamples = pointsRef.current
+      .map((p) => p.hrBpm)
+      .filter((x): x is number => typeof x === "number");
     const ride: RideRecord = {
       id: `ride_${startedAt}`,
       startedAt,
@@ -554,19 +686,22 @@ export default function LiveRide() {
       points: pointsRef.current,
       laps: lapsRef.current,
       stops: stopsRef.current,
-      totalDistMi: distMi,
+      totalDistMi: rideDistMi,
       movingTimeSec: movingTimeRef.current,
       totalTimeSec,
-      avgSpeedMph: avgMph,
+      avgSpeedMph: rideAvgMph,
       maxSpeedMph: maxSpeedRef.current * MS_TO_MPH,
       ascentFt: ascentRef.current,
       descentFt: descentRef.current,
+      avgHrBpm: hrSamples.length ? Math.round(hrSamples.reduce((a, b) => a + b, 0) / hrSamples.length) : undefined,
+      maxHrBpm: hrSamples.length ? Math.max(...hrSamples) : undefined,
     };
     saveRide(ride);
     setState("ended");
   };
 
   const discardAndReset = () => {
+    endShareIfActive();
     setState("idle");
     setPoints((prev) => prev.length > 0 ? [prev[prev.length - 1]] : []);
     totalDistMRef.current = 0;
@@ -584,13 +719,33 @@ export default function LiveRide() {
   // --- derived values for display ----------------------------------------
   const current = points[points.length - 1];
   const currentSpeedMph = current?.speedMs != null ? current.speedMs * MS_TO_MPH : 0;
-  const distMi = totalDistM * M_TO_MI;
-  const elapsedRefNow = state === "ended" && endedAtRef.current ? endedAtRef.current : now;
-  const totalElapsedSec = startedAtRef.current
-    ? (elapsedRefNow - startedAtRef.current) / 1000
-    : 0;
   const avgMph = movingTimeS > 0 ? (totalDistM / movingTimeS) * MS_TO_MPH : 0;
   const altFt = current?.altM != null ? current.altM * M_TO_FT : null;
+
+  // Live road grade (%) estimated from recent GPS elevation.
+  const gradePct = useMemo(() => liveGradePct(points), [points]);
+
+  // Climb tracker — banner pops while sustaining ≥3% grade, showing gain so far.
+  const climbStartAltRef = useRef<number | null>(null);
+  const [climb, setClimb] = useState<{ gradePct: number; gainFt: number } | null>(null);
+  useEffect(() => {
+    if (state !== "recording") {
+      climbStartAltRef.current = null;
+      setClimb(null);
+      return;
+    }
+    const altM = current?.altM;
+    if (gradePct == null || altM == null) return;
+    if (gradePct >= 3) {
+      if (climbStartAltRef.current == null) climbStartAltRef.current = altM;
+      setClimb({ gradePct, gainFt: Math.max(0, (altM - climbStartAltRef.current) * M_TO_FT) });
+    } else if (gradePct < 1.5) {
+      climbStartAltRef.current = null;
+      setClimb(null);
+    }
+  }, [gradePct, current, state]);
+
+  const nearestThreatM = sensors.radar.threats[0]?.distanceM ?? null;
 
   // Heading & wind-relative direction
   const heading = useMemo(() => {
@@ -746,6 +901,72 @@ export default function LiveRide() {
         </div>
       </div>
 
+      {/* Safety bar — live sharing + SOS, available once an activity is underway */}
+      {state !== "idle" && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {shareState === "active" ? (
+            <>
+              <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/15 text-emerald-400 px-2.5 py-1.5 text-xs font-semibold">
+                ● Sharing live
+              </span>
+              <button
+                type="button"
+                onClick={shareLink}
+                className="rounded-lg border border-gray-700 bg-gray-800 hover:bg-gray-700 px-2.5 py-1.5 text-xs text-gray-200"
+              >
+                {shareCopied ? "Copied ✓" : "Share link"}
+              </button>
+              <button
+                type="button"
+                onClick={endShareIfActive}
+                className="rounded-lg border border-gray-700 px-2.5 py-1.5 text-xs text-gray-400 hover:text-gray-200"
+              >
+                Stop
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={startShare}
+              disabled={shareState === "starting"}
+              className="inline-flex items-center gap-1 rounded-lg border border-gray-700 bg-gray-800 hover:bg-gray-700 px-2.5 py-1.5 text-xs text-gray-200 disabled:opacity-50"
+            >
+              📡 {shareState === "starting" ? "Starting…" : shareState === "error" ? "Retry share" : "Share live"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={triggerSos}
+            disabled={sosState === "sending"}
+            className="ml-auto inline-flex items-center gap-1 rounded-lg bg-red-600/90 hover:bg-red-500 px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+          >
+            🆘 {sosState === "sending" ? "Sending…" : sosState === "sent" ? "Sent ✓" : "SOS"}
+          </button>
+        </div>
+      )}
+
+      {shareState === "active" && shareUrl && (
+        <div className="mb-3 rounded-lg border border-gray-800 bg-gray-900 px-3 py-2 text-xs text-gray-400 break-all">
+          Anyone with this link can watch live: <span className="text-gray-200">{shareUrl}</span>
+        </div>
+      )}
+      {sosState === "none" && (
+        <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+          No emergency contacts with an email yet. Add one in{" "}
+          <Link href="/settings" className="underline">Settings</Link>.
+        </div>
+      )}
+      {sosState === "sent" && (
+        <div className="mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+          SOS sent to your emergency contacts.
+        </div>
+      )}
+      {sosState === "error" && (
+        <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+          Couldn&apos;t send SOS. Check your connection and try again.
+        </div>
+      )}
+
       {error && !weatherLoc && (
         <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-red-400 text-sm">
           {error}
@@ -801,6 +1022,23 @@ export default function LiveRide() {
         </div>
       )}
 
+      {sensors.radar.connected && nearestThreatM != null && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="mb-3 rounded-xl border-2 border-red-500 bg-red-500/15 p-3 text-red-300 text-sm font-bold flex items-center gap-2 animate-pulse"
+        >
+          <span className="text-lg leading-none">🚗</span>
+          <div className="flex-1">
+            VEHICLE APPROACHING
+            <span className="ml-2 font-normal text-red-200">
+              nearest {Math.round(nearestThreatM)} m
+              {sensors.radar.threats.length > 1 ? ` · ${sensors.radar.threats.length} vehicles` : ""}
+            </span>
+          </div>
+        </div>
+      )}
+
       {heatAlert && (
         <div
           role="alert"
@@ -826,9 +1064,83 @@ export default function LiveRide() {
         </div>
       )}
 
+      {climb && (
+        <div className="mb-3 rounded-xl border border-orange-500/30 bg-orange-500/10 p-3 text-orange-300 text-sm flex items-center gap-2">
+          <span className="text-lg leading-none">⛰️</span>
+          <div className="flex-1">
+            <span className="font-bold">Climbing {climb.gradePct.toFixed(1)}%</span>
+            <span className="ml-2 text-orange-200/80">+{Math.round(climb.gainFt)} ft this climb</span>
+          </div>
+        </div>
+      )}
+
+      {reminders.active && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="mb-3 rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sky-200 text-sm flex items-center gap-2"
+        >
+          <span className="text-lg leading-none">{reminders.active.kind === "drink" ? "💧" : "🍔"}</span>
+          <div className="flex-1 font-semibold">
+            {reminders.active.kind === "drink"
+              ? "Time to hydrate — take a drink"
+              : "Fuel up — time to eat something"}
+          </div>
+          <button
+            type="button"
+            onClick={reminders.dismiss}
+            className="rounded-md border border-white/15 px-2 py-1 text-xs text-gray-200 hover:bg-white/10"
+          >
+            Got it
+          </button>
+        </div>
+      )}
+
+      {/* Live sensor chips — visible on any tab once data is flowing */}
+      {(sensors.hr.connected || sensors.ebike.connected || sensors.radar.connected || gradePct != null) && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+          {gradePct != null && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-gray-800 bg-gray-900 px-2.5 py-1">
+              <span className="text-gray-500">Grade</span>
+              <span className={`font-bold tabular-nums ${gradeColorClass(gradePct)}`}>
+                {gradePct > 0 ? "+" : ""}{gradePct.toFixed(1)}%
+              </span>
+            </span>
+          )}
+          {sensors.hr.connected && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-gray-800 bg-gray-900 px-2.5 py-1">
+              <span className="text-red-400">❤️</span>
+              <span className="font-bold tabular-nums text-white">{sensors.hr.bpm ?? "—"}</span>
+              <span className="text-gray-500">bpm</span>
+            </span>
+          )}
+          {sensors.ebike.connected && sensors.ebike.batteryPct != null && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-gray-800 bg-gray-900 px-2.5 py-1">
+              <span className="text-emerald-400">🔋</span>
+              <span className="font-bold tabular-nums text-white">{sensors.ebike.batteryPct}%</span>
+            </span>
+          )}
+          {sensors.ebike.connected && sensors.ebike.powerW != null && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-gray-800 bg-gray-900 px-2.5 py-1">
+              <span className="text-amber-400">⚡</span>
+              <span className="font-bold tabular-nums text-white">{sensors.ebike.powerW}</span>
+              <span className="text-gray-500">W</span>
+            </span>
+          )}
+          {sensors.radar.connected && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-gray-800 bg-gray-900 px-2.5 py-1">
+              <span>📡</span>
+              <span className={nearestThreatM != null ? "font-bold text-red-400" : "text-gray-400"}>
+                {nearestThreatM != null ? `${Math.round(nearestThreatM)} m` : "clear"}
+              </span>
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Tab bar */}
       <div className="mb-4 flex gap-1 rounded-xl border border-gray-800 bg-gray-900 p-1 text-sm">
-        {(["stats", "map", "weather"] as Tab[]).map((t) => (
+        {(["stats", "map", "weather", "devices"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -836,7 +1148,7 @@ export default function LiveRide() {
               tab === t ? "bg-sky-500 text-white" : "text-gray-400 hover:text-gray-200"
             }`}
           >
-            {t === "stats" ? "Stats" : t === "map" ? "Map" : "Weather"}
+            {t === "stats" ? "Stats" : t === "map" ? "Map" : t === "weather" ? "Weather" : "Devices"}
           </button>
         ))}
       </div>
@@ -899,6 +1211,42 @@ export default function LiveRide() {
               </div>
             </div>
           </div>
+
+          {/* Grade + connected sensors */}
+          {(gradePct != null || sensors.hr.connected || (sensors.ebike.connected && sensors.ebike.batteryPct != null)) && (
+            <div className="grid grid-cols-3 gap-3">
+              {gradePct != null && (
+                <div className="card py-4">
+                  <div className="text-[10px] uppercase tracking-widest text-gray-500">Grade</div>
+                  <div className={`text-2xl font-bold tabular-nums mt-1 ${gradeColorClass(gradePct)}`}>
+                    {gradePct > 0 ? "+" : ""}{gradePct.toFixed(1)}
+                    <span className="ml-0.5 text-xs text-gray-500 font-normal">%</span>
+                  </div>
+                </div>
+              )}
+              {sensors.hr.connected && (
+                <div className="card py-4">
+                  <div className="text-[10px] uppercase tracking-widest text-red-400">❤️ Heart Rate</div>
+                  <div className="text-2xl font-bold tabular-nums text-white mt-1">
+                    {sensors.hr.bpm ?? "—"}
+                    <span className="ml-0.5 text-xs text-gray-500 font-normal">bpm</span>
+                  </div>
+                </div>
+              )}
+              {sensors.ebike.connected && sensors.ebike.batteryPct != null && (
+                <div className="card py-4">
+                  <div className="text-[10px] uppercase tracking-widest text-emerald-400">🔋 E-bike</div>
+                  <div className="text-2xl font-bold tabular-nums text-white mt-1">
+                    {sensors.ebike.batteryPct}
+                    <span className="ml-0.5 text-xs text-gray-500 font-normal">%</span>
+                  </div>
+                  {sensors.ebike.powerW != null && (
+                    <div className="text-[10px] text-amber-400 mt-0.5">{sensors.ebike.powerW} W</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Weather chip + wind */}
           {weather && (
@@ -1093,6 +1441,144 @@ export default function LiveRide() {
               {weatherLoading ? "Loading weather…" : "Waiting for first GPS fix to fetch weather…"}
             </div>
           )}
+        </div>
+      )}
+
+      {/* === DEVICES === */}
+      {tab === "devices" && (
+        <div className="space-y-3">
+          {/* Bluetooth sensors */}
+          <div className="card py-4">
+            <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-3">Bluetooth Sensors</div>
+            {!sensors.supported ? (
+              <p className="text-sm text-gray-400">
+                Web Bluetooth isn&apos;t available in this browser. Use Chrome or Edge on Android or
+                desktop (over HTTPS) to pair a heart-rate strap, Garmin Varia radar, or e-bike.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {/* Heart-rate strap */}
+                <div className="flex items-center justify-between rounded-lg bg-gray-800/50 px-3 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">❤️</span>
+                    <div>
+                      <div className="text-sm font-medium text-gray-200">Heart-rate strap</div>
+                      <div className="text-xs text-gray-500">
+                        {sensors.hr.connected
+                          ? `${sensors.hr.deviceName ?? "Connected"} · ${sensors.hr.bpm ?? "—"} bpm`
+                          : "Any standard BLE heart-rate monitor"}
+                      </div>
+                    </div>
+                  </div>
+                  {sensors.hr.connected ? (
+                    <button onClick={sensors.disconnectHr} className="rounded-md border border-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700">Disconnect</button>
+                  ) : (
+                    <button onClick={sensors.connectHr} disabled={sensors.hr.connecting} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-50">
+                      {sensors.hr.connecting ? "Pairing…" : "Connect"}
+                    </button>
+                  )}
+                </div>
+
+                {/* Garmin Varia radar */}
+                <div className="flex items-center justify-between rounded-lg bg-gray-800/50 px-3 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">📡</span>
+                    <div>
+                      <div className="text-sm font-medium text-gray-200">Bike radar</div>
+                      <div className="text-xs text-gray-500">
+                        {sensors.radar.connected
+                          ? `${sensors.radar.deviceName ?? "Connected"} · ${sensors.radar.threats.length > 0 ? `${sensors.radar.threats.length} approaching` : "all clear"}`
+                          : "Garmin Varia & compatible rear radar"}
+                      </div>
+                    </div>
+                  </div>
+                  {sensors.radar.connected ? (
+                    <button onClick={sensors.disconnectRadar} className="rounded-md border border-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700">Disconnect</button>
+                  ) : (
+                    <button onClick={sensors.connectRadar} disabled={sensors.radar.connecting} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-50">
+                      {sensors.radar.connecting ? "Pairing…" : "Connect"}
+                    </button>
+                  )}
+                </div>
+
+                {/* E-bike */}
+                <div className="flex items-center justify-between rounded-lg bg-gray-800/50 px-3 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🚲</span>
+                    <div>
+                      <div className="text-sm font-medium text-gray-200">E-bike / power meter</div>
+                      <div className="text-xs text-gray-500">
+                        {sensors.ebike.connected
+                          ? `${sensors.ebike.deviceName ?? "Connected"}${sensors.ebike.batteryPct != null ? ` · ${sensors.ebike.batteryPct}% battery` : ""}${sensors.ebike.powerW != null ? ` · ${sensors.ebike.powerW} W` : ""}`
+                          : "Battery level & power where the bike exposes it"}
+                      </div>
+                    </div>
+                  </div>
+                  {sensors.ebike.connected ? (
+                    <button onClick={sensors.disconnectEbike} className="rounded-md border border-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700">Disconnect</button>
+                  ) : (
+                    <button onClick={sensors.connectEbike} disabled={sensors.ebike.connecting} className="btn-primary px-3 py-1.5 text-xs disabled:opacity-50">
+                      {sensors.ebike.connecting ? "Pairing…" : "Connect"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            {sensors.error && <p className="mt-3 text-xs text-red-400">{sensors.error}</p>}
+          </div>
+
+          {/* Fuel & hydration reminders */}
+          <div className="card py-4">
+            <div className="text-[10px] uppercase tracking-widest text-gray-500 mb-3">Fuel &amp; Hydration Reminders</div>
+            <div className="space-y-3">
+              {(["drink", "eat"] as const).map((kind) => {
+                const rule = reminders.prefs[kind];
+                return (
+                  <div key={kind} className="flex flex-wrap items-center gap-2">
+                    <label className="flex items-center gap-2 min-w-[110px]">
+                      <input
+                        type="checkbox"
+                        checked={rule.enabled}
+                        onChange={(e) => updateReminder(kind, { enabled: e.target.checked })}
+                        className="rounded accent-sky-500"
+                      />
+                      <span className="text-sm text-gray-200">{kind === "drink" ? "💧 Drink" : "🍔 Eat"}</span>
+                    </label>
+                    <span className="text-xs text-gray-500">every</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={rule.value}
+                      disabled={!rule.enabled}
+                      onChange={(e) => updateReminder(kind, { value: Math.max(1, Number(e.target.value) || 1) })}
+                      className="w-16 rounded-md bg-gray-900 border border-gray-800 px-2 py-1 text-sm text-gray-200 disabled:opacity-50"
+                    />
+                    <select
+                      value={rule.mode}
+                      disabled={!rule.enabled}
+                      onChange={(e) => updateReminder(kind, { mode: e.target.value as ReminderMode })}
+                      className="rounded-md bg-gray-900 border border-gray-800 px-2 py-1 text-sm text-gray-200 disabled:opacity-50"
+                    >
+                      <option value="time">min</option>
+                      <option value="distance">mi</option>
+                    </select>
+                  </div>
+                );
+              })}
+              <label className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  checked={reminders.prefs.sound}
+                  onChange={(e) => reminders.setPrefs({ ...reminders.prefs, sound: e.target.checked })}
+                  className="rounded accent-sky-500"
+                />
+                <span className="text-xs text-gray-400">Play a sound with each reminder</span>
+              </label>
+              <p className="text-[11px] text-gray-600">
+                Reminders fire while you&apos;re recording — they vibrate{reminders.prefs.sound ? " and beep" : ""} and show on screen when due.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 

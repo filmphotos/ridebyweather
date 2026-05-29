@@ -35,6 +35,8 @@ export interface RideRecord {
   maxSpeedMph: number;
   ascentFt: number;
   descentFt: number;
+  avgHrBpm?: number;       // from a paired BLE heart-rate strap
+  maxHrBpm?: number;
   notes?: string;
 }
 

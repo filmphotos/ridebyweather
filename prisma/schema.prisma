@@ -26,6 +26,9 @@ model User {
   pushSubscriptions PushSubscription[]
   groupRidesCreated GroupRide[] @relation("GroupRideCreator")
   groupRideRsvps    GroupRideParticipant[]
+  liveSessions      LiveSession[]
+  emergencyContacts EmergencyContact[]
+  roadClosures      RoadClosure[]
 
   @@map("users")
 }
@@ -252,6 +255,76 @@ model DevicePairing {
 
   @@index([deviceSecret])
   @@map("device_pairings")
+}
+
+// A live, shareable activity feed. The token goes in a public /watch/<token>
+// link so family/friends can follow along without an account. Ends when the
+// rider stops; positions are appended as the ride progresses.
+model LiveSession {
+  id          String    @id @default(cuid())
+  token       String    @unique @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  sport       String    @default("cycling")
+  status      String    @default("active")   // active | ended
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+
+  lat         Float?
+  lng         Float?
+  speedMph    Float?
+  headingDeg  Float?
+  distanceMi  Float     @default(0)
+  elapsedSec  Int       @default(0)
+  path        String    @default("[]")        // JSON array of [lng, lat] breadcrumbs (capped)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("live_sessions")
+}
+
+// People to alert in an emergency (e.g. a spouse). The SOS button emails these
+// contacts the rider's live location / watch link.
+model EmergencyContact {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name      String
+  relation  String?
+  email     String?
+  phone     String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("emergency_contacts")
+}
+
+// Rider-reported road problems — closures, hazards, construction, flooding,
+// etc. Shown to nearby riders on the live map. Auto-expire so stale reports
+// don't linger.
+model RoadClosure {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  lat         Float
+  lng         Float
+  type        String   @default("closure")   // closure | hazard | construction | flooding | crash | other
+  description String?
+  severity    String   @default("warning")   // info | warning | danger
+  status      String   @default("active")     // active | cleared
+  confirmations Int    @default(0)
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([lat, lng])
+  @@index([status, expiresAt])
+  @@map("road_closures")
 }
 
 model PartnerListing {

@@ -15,6 +15,11 @@ const PUBLIC_PAGES = new Set<string>([
   "/link",
 ]);
 
+// Pages matched by prefix (dynamic segments). The live-ride "watch" page is
+// intentionally public so family/friends without an account can follow along;
+// the unguessable token in the URL is the access control.
+const PUBLIC_PAGE_PREFIXES = ["/watch/"];
+
 const PUBLIC_API_PREFIXES = [
   "/api/auth/login",
   "/api/auth/register",
@@ -34,6 +39,9 @@ const PUBLIC_API_PREFIXES = [
   // Static map image for devices — auth via ?token= (image requests can't
   // send an Authorization header); the handler verifies it.
   "/api/map",
+  // Public read for a shared live ride — the watch token is the secret.
+  // (Writes — /api/live/start and /api/live/ping — stay gated.)
+  "/api/live/view",
 ];
 
 function isPublicApi(pathname: string): boolean {
@@ -46,6 +54,7 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (PUBLIC_PAGES.has(pathname)) return NextResponse.next();
+  if (PUBLIC_PAGE_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next();
   if (pathname.startsWith("/api/") && isPublicApi(pathname)) {
     return NextResponse.next();
   }

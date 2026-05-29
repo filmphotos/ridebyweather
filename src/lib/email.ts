@@ -32,6 +32,36 @@ export async function sendEmail({ to, subject, html, text }: SendEmailParams): P
   }
 }
 
+export function sosEmail(opts: {
+  riderName: string;
+  mapUrl: string;
+  watchUrl?: string;
+  when: Date;
+}): { subject: string; html: string; text: string } {
+  const { riderName, mapUrl, watchUrl, when } = opts;
+  const subject = `🚨 SOS from ${riderName} — they may need help`;
+  const timeStr = when.toLocaleString();
+  const text = [
+    `${riderName} triggered an emergency SOS from RideByWeather at ${timeStr}.`,
+    "",
+    `Their last known location: ${mapUrl}`,
+    watchUrl ? `Follow them live: ${watchUrl}` : "",
+    "",
+    "If you can't reach them, consider contacting local emergency services.",
+  ].filter(Boolean).join("\n");
+  const html = `<!doctype html>
+<html><body style="font-family:system-ui,-apple-system,sans-serif;background:#0b1220;color:#e5e7eb;padding:24px">
+  <div style="max-width:520px;margin:0 auto;background:#111827;border:1px solid #7f1d1d;border-radius:12px;padding:32px">
+    <h1 style="margin:0 0 8px;color:#f87171;font-size:20px">🚨 Emergency SOS</h1>
+    <p style="margin:0 0 20px;color:#9ca3af;font-size:14px"><strong style="color:#fff">${riderName}</strong> triggered an emergency SOS from RideByWeather at ${timeStr}.</p>
+    <a href="${mapUrl}" style="display:inline-block;background:#dc2626;color:#fff;text-decoration:none;padding:12px 20px;border-radius:8px;font-weight:600;font-size:14px">See last known location</a>
+    ${watchUrl ? `<p style="margin:20px 0 0"><a href="${watchUrl}" style="color:#0ea5e9;font-size:14px">Follow them live →</a></p>` : ""}
+    <p style="margin:24px 0 0;color:#6b7280;font-size:12px">If you can't reach them, consider contacting local emergency services.</p>
+  </div>
+</body></html>`;
+  return { subject, html, text };
+}
+
 export function passwordResetEmail(resetUrl: string): { subject: string; html: string; text: string } {
   const subject = "Reset your RideByWeather password";
   const text = [

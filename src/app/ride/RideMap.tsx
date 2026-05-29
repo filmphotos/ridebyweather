@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useEffect, useState } from "react";
+import { useCallback, useMemo, useRef, useEffect, useState } from "react";
 import { Map, Source, Layer, Marker, NavigationControl } from "react-map-gl/mapbox";
 import type { MapRef } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
@@ -20,6 +20,31 @@ interface RideRestaurant {
   lat: number;
   lng: number;
   distanceMi: number;
+}
+
+interface RoadClosure {
+  id: string;
+  lat: number;
+  lng: number;
+  type: "closure" | "hazard" | "construction" | "flooding" | "crash" | "other";
+  description: string | null;
+  severity: "info" | "warning" | "danger";
+  confirmations: number;
+  isMine: boolean;
+  distanceMi: number;
+}
+
+const CLOSURE_TYPES: Array<{ id: RoadClosure["type"]; label: string; emoji: string }> = [
+  { id: "closure", label: "Road closed", emoji: "🚧" },
+  { id: "hazard", label: "Hazard", emoji: "⚠️" },
+  { id: "construction", label: "Construction", emoji: "👷" },
+  { id: "flooding", label: "Flooding", emoji: "🌊" },
+  { id: "crash", label: "Crash", emoji: "💥" },
+  { id: "other", label: "Other", emoji: "❗" },
+];
+
+function closureMeta(type: RoadClosure["type"]) {
+  return CLOSURE_TYPES.find((c) => c.id === type) ?? CLOSURE_TYPES[CLOSURE_TYPES.length - 1];
 }
 
 // Only re-fetch restaurants when the rider moves >2 km from the last fetch
@@ -47,6 +72,12 @@ export default function RideMap({ points, heading, windDirDeg, windSpeedMph }: P
   const [mapError, setMapError] = useState<string | null>(null);
   const lastFetchRef = useRef<{ lat: number; lng: number } | null>(null);
 
+  const [closures, setClosures] = useState<RoadClosure[]>([]);
+  const [selectedClosure, setSelectedClosure] = useState<RoadClosure | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportBusy, setReportBusy] = useState(false);
+  const lastClosureFetchRef = useRef<{ lat: number; lng: number } | null>(null);
+
   // Fetch restaurants once we have a fix, then re-fetch only when the rider
   // has moved >REFETCH_DISTANCE_M from where we last asked.
   useEffect(() => {
@@ -66,6 +97,70 @@ export default function RideMap({ points, heading, windDirDeg, windSpeedMph }: P
       .catch(() => {});
     return () => ctrl.abort();
   }, [current?.lat, current?.lng]);
+
+  // --- rider-reported road closures / problems ---------------------------
+  const fetchClosures = useCallback((lat: number, lng: number) => {
+    fetch(`/api/road-closures?lat=${lat}&lng=${lng}&radius=15`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d && Array.isArray(d.closures)) setClosures(d.closures as RoadClosure[]);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!current) return;
+    const last = lastClosureFetchRef.current;
+    if (last && haversineM(last.lat, last.lng, current.lat, current.lng) < REFETCH_DISTANCE_M) return;
+    lastClosureFetchRef.current = { lat: current.lat, lng: current.lng };
+    fetchClosures(current.lat, current.lng);
+  }, [current?.lat, current?.lng, fetchClosures]);
+
+  const reportClosure = async (type: RoadClosure["type"]) => {
+    if (!current) return;
+    setReportBusy(true);
+    try {
+      const res = await fetch("/api/road-closures", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lat: current.lat, lng: current.lng, type }),
+      });
+      if (res.ok) {
+        lastClosureFetchRef.current = null; // force a refetch that includes the new report
+        fetchClosures(current.lat, current.lng);
+      }
+    } catch {
+      // best-effort
+    } finally {
+      setReportBusy(false);
+      setReportOpen(false);
+    }
+  };
+
+  const confirmClosure = async (id: string) => {
+    try {
+      const res = await fetch(`/api/road-closures/${id}`, { method: "POST" });
+      if (!res.ok) return;
+      const d = await res.json();
+      const n = d.closure?.confirmations as number | undefined;
+      if (n == null) return;
+      setClosures((cs) => cs.map((c) => (c.id === id ? { ...c, confirmations: n } : c)));
+      setSelectedClosure((s) => (s && s.id === id ? { ...s, confirmations: n } : s));
+    } catch {
+      // best-effort
+    }
+  };
+
+  const removeClosure = async (id: string) => {
+    try {
+      const res = await fetch(`/api/road-closures/${id}`, { method: "DELETE" });
+      if (!res.ok) return;
+      setClosures((cs) => cs.filter((c) => c.id !== id));
+      setSelectedClosure(null);
+    } catch {
+      // best-effort
+    }
+  };
 
   const trackGeoJSON = useMemo(() => ({
     type: "FeatureCollection" as const,
@@ -213,6 +308,78 @@ export default function RideMap({ points, heading, windDirDeg, windSpeedMph }: P
             </div>
           </Marker>
         )}
+
+        {/* Rider-reported road closures & hazards */}
+        {closures.map((c) => {
+          const ring =
+            c.severity === "danger" ? "bg-red-600" : c.severity === "info" ? "bg-sky-600" : "bg-amber-600";
+          return (
+            <Marker
+              key={c.id}
+              longitude={c.lng}
+              latitude={c.lat}
+              anchor="center"
+              onClick={(e) => {
+                e.originalEvent.stopPropagation();
+                setSelectedClosure(c);
+              }}
+            >
+              <div
+                title={closureMeta(c.type).label}
+                className={`flex h-7 w-7 items-center justify-center rounded-full border-2 border-white shadow-lg cursor-pointer text-[13px] ${ring}`}
+              >
+                {closureMeta(c.type).emoji}
+              </div>
+            </Marker>
+          );
+        })}
+
+        {selectedClosure && (
+          <Marker longitude={selectedClosure.lng} latitude={selectedClosure.lat} anchor="bottom" offset={[0, -30]}>
+            <div className="rounded-lg border border-gray-600 bg-gray-900/95 backdrop-blur-sm px-3 py-2 text-xs shadow-xl min-w-[180px]">
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-semibold text-white">
+                  {closureMeta(selectedClosure.type).emoji} {closureMeta(selectedClosure.type).label}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedClosure(null);
+                  }}
+                  className="text-gray-500 hover:text-gray-300 text-base leading-none"
+                  aria-label="Close"
+                >
+                  ×
+                </button>
+              </div>
+              {selectedClosure.description && (
+                <p className="text-gray-400 mt-1">{selectedClosure.description}</p>
+              )}
+              <p className="text-gray-500 mt-1">
+                {selectedClosure.distanceMi.toFixed(1)} mi away · {selectedClosure.confirmations} confirmed
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => confirmClosure(selectedClosure.id)}
+                  className="rounded-md bg-gray-800 hover:bg-gray-700 border border-gray-700 px-2 py-1 text-gray-200"
+                >
+                  ✓ Still there
+                </button>
+                {selectedClosure.isMine && (
+                  <button
+                    type="button"
+                    onClick={() => removeClosure(selectedClosure.id)}
+                    className="rounded-md px-2 py-1 text-red-400 hover:text-red-300"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            </div>
+          </Marker>
+        )}
       </Map>
 
       {mapError && (
@@ -224,6 +391,34 @@ export default function RideMap({ points, heading, windDirDeg, windSpeedMph }: P
           </p>
         </div>
       )}
+
+      {/* Report a road problem — bottom-left, above the food toggle */}
+      <div className="absolute bottom-14 left-3">
+        {reportOpen && (
+          <div className="absolute bottom-full left-0 mb-2 rounded-lg border border-gray-700 bg-gray-900 shadow-xl overflow-hidden text-xs min-w-[160px]">
+            {CLOSURE_TYPES.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                disabled={reportBusy}
+                onClick={() => reportClosure(t.id)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-200 hover:bg-gray-800 disabled:opacity-50 border-b border-gray-800 last:border-0"
+              >
+                <span>{t.emoji}</span> {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setReportOpen((v) => !v)}
+          className="flex items-center gap-1.5 rounded-xl bg-gray-900/85 backdrop-blur-sm px-2.5 py-1.5 border border-amber-500/40 text-amber-400 text-xs"
+          aria-expanded={reportOpen}
+        >
+          <span className="text-sm leading-none">⚠️</span>
+          {reportBusy ? "Reporting…" : "Report"}
+        </button>
+      </div>
 
       {/* Food toggle — bottom-left, mirrors the wind chip */}
       <button
