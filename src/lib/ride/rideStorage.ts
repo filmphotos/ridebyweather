@@ -102,11 +102,19 @@ export function deleteRide(id: string): void {
 }
 
 async function uploadRide(ride: RideRecord): Promise<void> {
-  await fetch("/api/rides", {
+  const res = await fetch("/api/rides", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(ride),
   });
+  if (!res.ok) {
+    // Surface upload failures in the browser console so a stuck ride is
+    // diagnosable. We don't throw — saveRide is fire-and-forget and the ride
+    // is already safe in localStorage; the next sync will retry.
+    let detail = "";
+    try { detail = await res.text(); } catch {}
+    console.warn(`[rideStorage] upload failed ${res.status}: ${detail.slice(0, 300)}`);
+  }
 }
 
 /**
