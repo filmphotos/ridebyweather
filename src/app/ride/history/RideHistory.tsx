@@ -10,6 +10,7 @@ import {
   loadRides,
   syncRidesFromServer,
   type RideRecord,
+  type SyncResult,
 } from "@/lib/ride/rideStorage";
 import { fmtDuration } from "@/lib/ride/rideMath";
 import RidePhotos from "@/components/RidePhotos/RidePhotos";
@@ -20,16 +21,25 @@ export default function RideHistory() {
   const [rides, setRides] = useState<RideRecord[]>([]);
   const [selected, setSelected] = useState<RideRecord | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [syncInfo, setSyncInfo] = useState<SyncResult | null>(null);
+
+  async function runSync() {
+    setSyncing(true);
+    try {
+      const r = await syncRidesFromServer();
+      setRides(r.rides);
+      setSyncInfo(r);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   useEffect(() => {
     // Instant first paint from the local cache, then sync with the server
     // (uploads any local-only rides and pulls down rides recorded on other
     // devices). Server is the source of truth; cache is just for offline.
     setRides(loadRides());
-    setSyncing(true);
-    syncRidesFromServer()
-      .then((merged) => setRides(merged))
-      .finally(() => setSyncing(false));
+    runSync();
   }, []);
 
   async function openRide(ride: RideRecord) {
@@ -59,8 +69,44 @@ export default function RideHistory() {
             {syncing ? "Syncing…" : "Synced across your devices."}
           </p>
         </div>
-        <Link href="/ride" className="btn-primary text-sm px-4 py-2">Start New Ride</Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={runSync}
+            disabled={syncing}
+            className="rounded-lg border border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800 text-sm px-3 py-2 transition-colors disabled:opacity-50"
+            title="Re-sync with server"
+          >
+            {syncing ? "Syncing…" : "Sync"}
+          </button>
+          <Link href="/ride" className="btn-primary text-sm px-4 py-2">Start New Ride</Link>
+        </div>
       </div>
+
+      {/* Sync diagnostics — visible so we can see what's going on without
+          opening browser devtools. Hidden in the happy path (nothing to
+          report). */}
+      {syncInfo && !syncing && (syncInfo.fetchError || syncInfo.uploadErrors.length > 0 || syncInfo.uploadedCount > 0 || (syncInfo.localCount === 0 && syncInfo.serverCount === 0)) && (
+        <div className="mb-4 rounded-lg border border-gray-800 bg-gray-900/50 p-3 text-xs">
+          <div className="text-gray-400">
+            <span className="text-gray-500">Sync:</span>{" "}
+            local <span className="text-gray-200">{syncInfo.localCount}</span> ·{" "}
+            server <span className="text-gray-200">{syncInfo.serverCount}</span>
+            {syncInfo.uploadedCount > 0 && (
+              <> · uploaded <span className="text-emerald-400">{syncInfo.uploadedCount}</span></>
+            )}
+          </div>
+          {syncInfo.fetchError && (
+            <div className="mt-2 text-red-400">
+              <span className="text-gray-500">Fetch error:</span> {syncInfo.fetchError}
+            </div>
+          )}
+          {syncInfo.uploadErrors.length > 0 && (
+            <div className="mt-2 text-red-400">
+              <span className="text-gray-500">Upload error:</span> {syncInfo.uploadErrors[0]}
+            </div>
+          )}
+        </div>
+      )}
 
       {rides.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">

@@ -108,47 +108,66 @@ async function uploadRide(ride: RideRecord): Promise<void> {
     body: JSON.stringify(ride),
   });
   if (!res.ok) {
-    // Surface upload failures in the browser console so a stuck ride is
-    // diagnosable. We don't throw — saveRide is fire-and-forget and the ride
-    // is already safe in localStorage; the next sync will retry.
     let detail = "";
     try { detail = await res.text(); } catch {}
-    console.warn(`[rideStorage] upload failed ${res.status}: ${detail.slice(0, 300)}`);
+    const msg = `upload ${res.status}: ${detail.slice(0, 300)}`;
+    console.warn(`[rideStorage] ${msg}`);
+    throw new Error(msg);
   }
+}
+
+export interface SyncResult {
+  rides: RideRecord[];
+  localCount: number;
+  serverCount: number;
+  uploadedCount: number;
+  uploadErrors: string[];   // human-readable per-ride error messages
+  fetchError?: string;      // set if GET /api/rides failed entirely
 }
 
 /**
  * Pull the server's ride list, upload any rides we have locally that the
- * server doesn't, and reconcile the local cache. Returns the merged list,
- * newest first. Falls back to cache on network error so the history page
- * still works offline.
+ * server doesn't, and reconcile the local cache. Returns the merged list
+ * (newest first) plus diagnostic counts/errors the UI can surface.
  *
  * Server returns summaries (no `points`) — those rides will lazy-load their
  * track when the user opens the detail modal (see loadRideDetail).
  */
-export async function syncRidesFromServer(): Promise<RideRecord[]> {
+export async function syncRidesFromServer(): Promise<SyncResult> {
   const local = loadRides();
+  const result: SyncResult = {
+    rides: local,
+    localCount: local.length,
+    serverCount: 0,
+    uploadedCount: 0,
+    uploadErrors: [],
+  };
 
   let serverList: RideRecord[] = [];
   try {
     const res = await fetch("/api/rides", { cache: "no-store" });
-    if (!res.ok) throw new Error(String(res.status));
+    if (!res.ok) {
+      let detail = "";
+      try { detail = await res.text(); } catch {}
+      throw new Error(`${res.status}: ${detail.slice(0, 200)}`);
+    }
     const data = (await res.json()) as { rides?: RideRecord[] };
     serverList = Array.isArray(data.rides) ? data.rides : [];
-  } catch {
-    return local;
+    result.serverCount = serverList.length;
+  } catch (e) {
+    result.fetchError = e instanceof Error ? e.message : String(e);
+    return result;
   }
 
   const serverIds = new Set(serverList.map((r) => r.id));
   const localOnly = local.filter((r) => !serverIds.has(r.id));
 
-  // Upload anything the server is missing. Sequential so we don't slam the
-  // API with a burst on first sync; the typical user has < 30 rides.
   for (const r of localOnly) {
     try {
       await uploadRide(r);
-    } catch {
-      // Keep the ride in the cache so we'll retry on next sync.
+      result.uploadedCount += 1;
+    } catch (e) {
+      result.uploadErrors.push(e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -159,9 +178,9 @@ export async function syncRidesFromServer(): Promise<RideRecord[]> {
   for (const r of serverList) byId.set(r.id, r);
   for (const r of local) byId.set(r.id, r); // local wins (it has points)
 
-  const merged = Array.from(byId.values()).sort((a, b) => b.startedAt - a.startedAt);
-  writeCache(merged);
-  return merged;
+  result.rides = Array.from(byId.values()).sort((a, b) => b.startedAt - a.startedAt);
+  writeCache(result.rides);
+  return result;
 }
 
 /**
