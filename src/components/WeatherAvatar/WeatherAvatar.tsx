@@ -17,8 +17,7 @@ function selectAvatar(
   gender: "male" | "female",
   sport: "cycling" | "running" | "walking",
 ): string {
-  // Walking shares the running avatar set (same gear logic, no separate art)
-  const avatarSport = sport === "walking" ? "running" : sport;
+  const avatarSport = sport;
   const isRainy = precipProb > 0.4;
   const isHeavyRain = precipProb > 0.7;
   const isWindy = windSpeedMph > 18;
