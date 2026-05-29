@@ -192,6 +192,12 @@ export default function RideHistory() {
               <Stat label="Descent" value={`${Math.round(selected.descentFt)} ft`} color="amber" />
               <Stat label="Total Time" value={fmtDuration(selected.totalTimeSec)} />
               <Stat label="Stops" value={fmtDuration(selected.totalTimeSec - selected.movingTimeSec)} />
+              {selected.avgHrBpm != null && (
+                <Stat label="Avg HR" value={`${selected.avgHrBpm} bpm`} color="rose" />
+              )}
+              {selected.maxHrBpm != null && (
+                <Stat label="Max HR" value={`${selected.maxHrBpm} bpm`} color="rose" />
+              )}
             </div>
 
             {selected.points.length >= 2 && (
@@ -250,10 +256,11 @@ export default function RideHistory() {
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: string; color?: "emerald" | "amber" }) {
+function Stat({ label, value, color }: { label: string; value: string; color?: "emerald" | "amber" | "rose" }) {
   const valueClass =
     color === "emerald" ? "text-emerald-400"
     : color === "amber" ? "text-amber-400"
+    : color === "rose" ? "text-rose-400"
     : "text-white";
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900/50 px-3 py-2.5">
