@@ -9,6 +9,7 @@ const SosSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
   token: z.string().min(1).optional(), // live-session token, if sharing is on
+  at: z.string().min(1).max(120).optional(), // rider's local time string (server runs in UTC)
 });
 
 export async function POST(req: NextRequest) {
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid input", details: parsed.error.flatten() }, { status: 400 });
   }
-  const { lat, lng, token } = parsed.data;
+  const { lat, lng, token, at } = parsed.data;
 
   const [user, contacts] = await Promise.all([
     db.user.findUnique({ where: { id: payload.userId }, select: { name: true, email: true } }),
@@ -40,7 +41,9 @@ export async function POST(req: NextRequest) {
   const riderName = user?.name || user?.email || "A RideByWeather rider";
   const mapUrl = `https://www.google.com/maps?q=${lat},${lng}`;
   const watchUrl = token ? `${appOrigin(req)}/watch/${token}` : undefined;
-  const { subject, html, text } = sosEmail({ riderName, mapUrl, watchUrl, when: new Date() });
+  // Prefer the rider's local time; fall back to server time (UTC) labelled as such.
+  const whenStr = at || `${new Date().toLocaleString("en-US", { timeZoneName: "short" })} (server time)`;
+  const { subject, html, text } = sosEmail({ riderName, mapUrl, watchUrl, whenStr });
 
   const results = await Promise.allSettled(
     withEmail.map((c) => sendEmail({ to: c.email, subject, html, text }))

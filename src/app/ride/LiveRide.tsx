@@ -593,7 +593,12 @@ export default function LiveRide() {
       const res = await fetch("/api/sos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lat, lng, token: shareTokenRef.current ?? undefined }),
+        body: JSON.stringify({
+          lat,
+          lng,
+          token: shareTokenRef.current ?? undefined,
+          at: new Date().toLocaleString(undefined, { timeZoneName: "short" }),
+        }),
       });
       if (!res.ok) { setSosState(res.status === 400 ? "none" : "error"); return; }
       setSosState("sent");

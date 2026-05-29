@@ -36,11 +36,11 @@ export function sosEmail(opts: {
   riderName: string;
   mapUrl: string;
   watchUrl?: string;
-  when: Date;
+  whenStr: string;
 }): { subject: string; html: string; text: string } {
-  const { riderName, mapUrl, watchUrl, when } = opts;
+  const { riderName, mapUrl, watchUrl, whenStr } = opts;
   const subject = `🚨 SOS from ${riderName} — they may need help`;
-  const timeStr = when.toLocaleString();
+  const timeStr = whenStr;
   const text = [
     `${riderName} triggered an emergency SOS from RideByWeather at ${timeStr}.`,
     "",
