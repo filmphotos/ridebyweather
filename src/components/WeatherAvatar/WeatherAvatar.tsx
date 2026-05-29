@@ -38,145 +38,70 @@ function selectAvatar(
   return `/avatars/${avatarSport}-${gender}-${condition}.png`;
 }
 
-interface GearItem {
-  item: string;
-  reason: string;
-  required: boolean;
-  category: "base" | "layer" | "legs" | "accessory";
+type Band = "hot" | "warm" | "mild" | "cool" | "chilly" | "cold" | "veryCold" | "frigid";
+
+// Temperature bands, labels, and ranges taken straight from the guide.
+const BANDS: { key: Band; label: string; range: string; min: number; badge: string }[] = [
+  { key: "hot",      label: "Hot",       range: "90°F+",      min: 90,        badge: "bg-orange-900/40 text-orange-400" },
+  { key: "warm",     label: "Warm",      range: "80–89°F",    min: 80,        badge: "bg-yellow-900/40 text-yellow-400" },
+  { key: "mild",     label: "Mild",      range: "70–79°F",    min: 70,        badge: "bg-green-900/40 text-green-400" },
+  { key: "cool",     label: "Cool",      range: "60–69°F",    min: 60,        badge: "bg-green-900/40 text-green-400" },
+  { key: "chilly",   label: "Chilly",    range: "50–59°F",    min: 50,        badge: "bg-blue-800/40 text-blue-400" },
+  { key: "cold",     label: "Cold",      range: "40–49°F",    min: 40,        badge: "bg-blue-800/40 text-blue-400" },
+  { key: "veryCold", label: "Very Cold", range: "30–39°F",    min: 30,        badge: "bg-blue-900/50 text-blue-300" },
+  { key: "frigid",   label: "Very Cold", range: "Under 30°F", min: -Infinity, badge: "bg-blue-900/50 text-blue-300" },
+];
+
+function getBand(tempF: number) {
+  return BANDS.find((b) => tempF >= b.min) ?? BANDS[BANDS.length - 1];
 }
 
-function getOutfit(tempF: number, precipProb: number, windSpeedMph: number) {
-  const isRainy = precipProb > 0.4;
-  const isWindy = windSpeedMph > 15;
-  return {
-    // Base
-    thermalBase: tempF < 50,
-    // Torso layers
-    armWarmers: tempF < 60 && !( tempF < 45),
-    vest: (tempF >= 50 && tempF < 65) || (isWindy && tempF < 72 && tempF >= 55),
-    jacket: tempF < 50 && !isRainy,
-    rainJacket: isRainy,
-    // Legs
-    legWarmers: tempF < 55 && tempF >= 40,
-    tights: tempF < 40,
-    // Accessories
-    gloves: tempF < 55,
-    overshoes: tempF < 50 || isRainy,
-    sunglasses: !isRainy && precipProb < 0.3,
-    // Colors
-    jerseyColor: tempF >= 70 ? "#0ea5e9" : tempF >= 55 ? "#16a34a" : "#2563eb",
-    helmetColor: isRainy ? "#facc15" : "#e5e7eb",
-    helmetStroke: isRainy ? "#f59e0b" : "#9ca3af",
-  };
-}
+// Clothing recommendations transcribed verbatim from the RideByWeather Clothing & SPF
+// Guide. `f` overrides `m` only where the guide's Female column differs.
+const CLOTHING: Record<"cycling" | "running" | "walking", Record<Band, { m: string; f?: string }>> = {
+  cycling: {
+    hot:      { m: "Short sleeve jersey, bib shorts, thin socks, sunglasses, SPF 50", f: "Short sleeve jersey or tank, bib shorts or shorts, thin socks, sunglasses, SPF 50" },
+    warm:     { m: "Short sleeve jersey, bib shorts, fingerless gloves, SPF 30-50", f: "Short sleeve jersey, bib shorts or shorts, fingerless gloves, SPF 30-50" },
+    mild:     { m: "Short sleeve jersey, bib shorts, sunglasses, SPF if UV 3+", f: "Short sleeve jersey, bib shorts or shorts, sunglasses, SPF if UV 3+" },
+    cool:     { m: "Light long sleeve or short sleeve with arm warmers, bib shorts", f: "Light long sleeve or short sleeve with arm warmers, shorts or bib shorts" },
+    chilly:   { m: "Long sleeve jersey, knee warmers or tights, full-finger gloves", f: "Long sleeve jersey, tights or knee warmers, full-finger gloves" },
+    cold:     { m: "Thermal jersey, wind jacket, tights, warm gloves, ear cover" },
+    veryCold: { m: "Base layer, thermal jacket, winter tights, insulated gloves, shoe covers" },
+    frigid:   { m: "Heavy winter kit, face cover, thermal socks, lobster gloves" },
+  },
+  running: {
+    hot:      { m: "Singlet or light tee, split shorts, running cap, sunglasses, SPF 50", f: "Tank or light tee, shorts, sports bra, running cap, sunglasses, SPF 50" },
+    warm:     { m: "Light tee or singlet, shorts, thin socks, SPF 30-50", f: "Light tee or tank, shorts, thin socks, SPF 30-50" },
+    mild:     { m: "Short sleeve shirt, shorts, SPF if UV 3+", f: "Short sleeve shirt or tank, shorts, SPF if UV 3+" },
+    cool:     { m: "Short sleeve or light long sleeve, shorts", f: "Short sleeve or light long sleeve, shorts or light tights" },
+    chilly:   { m: "Long sleeve tech shirt, shorts or light tights, light gloves optional" },
+    cold:     { m: "Base layer or thermal top, running tights, gloves, ear band" },
+    veryCold: { m: "Thermal layer, wind shell, tights, warm gloves, hat" },
+    frigid:   { m: "Heavy thermal layers, windproof shell, insulated gloves, hat or face cover" },
+  },
+  walking: {
+    hot:      { m: "Breathable shirt, shorts, walking shoes, hat, sunglasses, SPF 50", f: "Breathable top, shorts or skort, walking shoes, hat, sunglasses, SPF 50" },
+    warm:     { m: "Light shirt, shorts, hat, sunglasses, SPF 30-50", f: "Light top, shorts or lightweight pants, hat, sunglasses, SPF 30-50" },
+    mild:     { m: "T-shirt or polo, shorts or light pants, SPF if UV 3+", f: "T-shirt or light blouse, shorts or light pants, SPF if UV 3+" },
+    cool:     { m: "Light jacket or hoodie, comfortable pants" },
+    chilly:   { m: "Long sleeve shirt, light jacket, pants", f: "Long sleeve top, light jacket, pants" },
+    cold:     { m: "Warm jacket, pants, light gloves, hat optional" },
+    veryCold: { m: "Winter coat, hat, gloves, warm socks" },
+    frigid:   { m: "Heavy coat, thermal layer, hat, gloves, scarf, warm boots" },
+  },
+};
 
-function buildGearList(tempF: number, precipProb: number, windSpeedMph: number, sport: "cycling" | "running" | "walking"): GearItem[] {
-  const isRainy = precipProb > 0.4;
-  const isWindy = windSpeedMph > 15;
-  // Walking shares running's gear logic (no helmet, lighter layers).
-  const isRun = sport === "running" || sport === "walking";
-  const items: GearItem[] = [];
-
-  // Base
-  if (tempF < 50) {
-    items.push({ item: "Thermal base layer", reason: `${Math.round(tempF)}°F — insulation needed`, required: true, category: "base" });
-  } else {
-    items.push({
-      item: isRun ? "Technical running shirt" : "Cycling jersey",
-      reason: tempF >= 70 ? "Warm weather — moisture wicking" : "Standard base layer",
-      required: true,
-      category: "base",
-    });
-  }
-  // Layers
-  if (isRainy) {
-    items.push({ item: "Waterproof rain jacket", reason: `${Math.round(precipProb * 100)}% rain probability`, required: precipProb > 0.6, category: "layer" });
-  } else if (tempF < 50) {
-    items.push({
-      item: isRun ? "Insulated running jacket" : "Insulated cycling jacket",
-      reason: "Below 50°F — full insulation",
-      required: true,
-      category: "layer",
-    });
-  } else if (tempF < 60) {
-    items.push({ item: "Arm warmers", reason: `${Math.round(tempF)}°F — core stays warm`, required: false, category: "layer" });
-    if (isWindy) items.push({ item: "Wind vest", reason: `${Math.round(windSpeedMph)} mph wind chill`, required: false, category: "layer" });
-  } else if (isWindy && tempF < 72) {
-    items.push({ item: "Wind vest", reason: `${Math.round(windSpeedMph)} mph headwind`, required: false, category: "layer" });
-  }
-  // Legs
-  if (tempF < 40) {
-    items.push({
-      item: isRun ? "Thermal running tights" : "Thermal tights",
-      reason: "Below 40°F — full leg insulation",
-      required: true,
-      category: "legs",
-    });
-  } else if (tempF < 55) {
-    items.push({
-      item: isRun ? "Running tights" : "Leg warmers",
-      reason: `${Math.round(tempF)}°F — legs need coverage`,
-      required: tempF < 48,
-      category: "legs",
-    });
-  }
-  // Accessories
-  if (tempF < 55) {
-    items.push({
-      item: isRun ? "Running gloves" : "Cycling gloves",
-      reason: tempF < 40 ? "Full fingered — near freezing" : isRun ? "Hands lose heat quickly" : "Cold hands impair braking",
-      required: tempF < 45,
-      category: "accessory",
-    });
-  }
-  if (isRun) {
-    if (tempF < 40) {
-      items.push({ item: "Beanie / ear warmers", reason: "Most body heat lost from head", required: tempF < 35, category: "accessory" });
-    } else if (tempF >= 70) {
-      items.push({ item: "Visor or cap", reason: "Sun & sweat shield", required: false, category: "accessory" });
-    }
-  } else {
-    if (tempF < 50 || isRainy) {
-      items.push({ item: "Shoe covers", reason: isRainy ? "Waterproof overshoes" : "Foot warmth critical", required: tempF < 40 || (isRainy && tempF < 55), category: "accessory" });
-    }
-  }
-  if (!isRainy) {
-    items.push({ item: "Sunglasses", reason: "Eye protection & wind shield", required: false, category: "accessory" });
-  }
-  if (!isRun) {
-    items.push({ item: "Helmet", reason: "Always required", required: true, category: "accessory" });
-  }
-
-  return items;
+function clothingItems(sport: "cycling" | "running" | "walking", band: Band, gender: "male" | "female"): string[] {
+  const cell = CLOTHING[sport][band];
+  const raw = gender === "female" && cell.f ? cell.f : cell.m;
+  return raw.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
 export default function WeatherAvatar({ tempF, precipProb, windSpeedMph, gender = "male", sport = "cycling" }: WeatherAvatarProps) {
-  const gear = buildGearList(tempF, precipProb, windSpeedMph, sport);
+  const band = getBand(tempF);
+  const items = clothingItems(sport, band.key, gender);
   const isRainy = precipProb > 0.4;
   const avatarSrc = selectAvatar(tempF, precipProb, windSpeedMph, gender, sport);
-
-  const conditionLabel =
-    tempF < 40 ? "Very Cold" : tempF < 55 ? "Cold" : tempF < 68 ? "Mild" : tempF < 80 ? "Warm" : "Hot";
-
-  const conditionClass =
-    tempF < 40 ? "bg-blue-900/50 text-blue-300" :
-    tempF < 55 ? "bg-blue-800/40 text-blue-400" :
-    tempF < 68 ? "bg-green-900/40 text-green-400" :
-    tempF < 80 ? "bg-yellow-900/40 text-yellow-400" :
-    "bg-orange-900/40 text-orange-400";
-
-  const categoryLabels: Record<string, string> = {
-    base: "Base Layer",
-    layer: "Outer Layer",
-    legs: "Legs",
-    accessory: "Accessories",
-  };
-
-  const grouped = gear.reduce<Record<string, GearItem[]>>((acc, item) => {
-    if (!acc[item.category]) acc[item.category] = [];
-    acc[item.category].push(item);
-    return acc;
-  }, {});
 
   return (
     <div className="card">
@@ -190,50 +115,31 @@ export default function WeatherAvatar({ tempF, precipProb, windSpeedMph, gender 
           <div className="rounded-xl bg-[#f5f0e8] p-2 shadow-md">
             <Image
               src={avatarSrc}
-              alt={`${sport === "running" ? "Runner" : "Cyclist"} outfit for ${Math.round(tempF)}°F${isRainy ? ", rain" : ""}`}
+              alt={`${sport === "cycling" ? "Cyclist" : sport === "walking" ? "Walker" : "Runner"} outfit for ${Math.round(tempF)}°F${isRainy ? ", rain" : ""}`}
               width={156}
               height={156}
               className="w-[156px] h-[156px] object-contain"
             />
           </div>
-          <span className={`mt-2 text-xs font-semibold px-2 py-0.5 rounded-full ${conditionClass}`}>
-            {conditionLabel}{isRainy ? " · Rain" : ""}
+          <span className={`mt-2 text-xs font-semibold px-2 py-0.5 rounded-full ${band.badge}`}>
+            {band.label}{isRainy ? " · Rain" : ""}
+          </span>
+          <span className="mt-1 text-[11px] text-gray-500">
+            {Math.round(tempF)}°F · {band.range}
           </span>
         </div>
-        {/* ── GEAR LIST ── */}
-        <div className="flex-1 space-y-3 min-w-0">
-          {(["base", "layer", "legs", "accessory"] as const).map((cat) => {
-            const items = grouped[cat];
-            if (!items?.length) return null;
-            return (
-              <div key={cat}>
-                <div className="text-xs font-semibold uppercase tracking-wider text-gray-600 mb-1">
-                  {categoryLabels[cat]}
-                </div>
-                <div className="space-y-1">
-                  {items.map((g) => (
-                    <div key={g.item} className="flex items-start gap-2">
-                      <span className={`mt-0.5 text-xs flex-shrink-0 ${g.required ? "text-sky-400" : "text-gray-600"}`}>
-                        {g.required ? "●" : "○"}
-                      </span>
-                      <div className="min-w-0">
-                        <span className={`text-xs font-medium ${g.required ? "text-gray-200" : "text-gray-500"}`}>
-                          {g.item}
-                        </span>
-                        <span className="text-xs text-gray-600 ml-1.5">{g.reason}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
-      <div className="mt-3 flex gap-3 text-xs text-gray-700">
-        <span>● Required</span>
-        <span>○ Recommended</span>
+        {/* ── GUIDE CLOTHING LIST ── */}
+        <div className="flex-1 min-w-0">
+          <div className="space-y-1.5">
+            {items.map((item) => (
+              <div key={item} className="flex items-start gap-2">
+                <span className="mt-0.5 text-xs flex-shrink-0 text-sky-400">●</span>
+                <span className="text-sm text-gray-200">{item}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
