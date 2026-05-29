@@ -11,6 +11,12 @@ import type { TrackPoint } from "./rideMath";
 import { deletePhotosForRide } from "@/lib/photos/photoStore";
 
 const KEY = "rbw_rides_v1";
+// Ride ids we've successfully synced to the server. Lets us tell the
+// difference between "new local ride that needs upload" and "ride that was
+// deleted on another device" — both look like "local, not on server" without
+// this hint. Without it, a delete on PC gets resurrected by the phone's next
+// sync (the phone uploads what it thinks is a local-only ride).
+const SYNCED_IDS_KEY = "rbw_rides_synced_ids_v1";
 const MAX_RIDES = 30;
 
 export type RideSport = "cycling" | "running" | "walking";
@@ -62,6 +68,25 @@ export function loadRides(): RideRecord[] {
   }
 }
 
+function loadSyncedIds(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(SYNCED_IDS_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw) as string[];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeSyncedIds(ids: Set<string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(SYNCED_IDS_KEY, JSON.stringify(Array.from(ids)));
+  } catch {}
+}
+
 function writeCache(rides: RideRecord[]): void {
   if (typeof window === "undefined") return;
   const trimmed = rides.slice(0, MAX_RIDES);
@@ -86,19 +111,45 @@ export function saveRide(ride: RideRecord): void {
   writeCache(next);
   // Fire-and-forget — the ride is already safe in localStorage. If the
   // upload fails (offline, server down), syncRidesFromServer() will retry it
-  // next time the history page loads.
-  uploadRide(ride).catch(() => {});
+  // next time the history page loads. On success, mark the id as synced so a
+  // later cross-device delete doesn't make this device re-upload it.
+  uploadRide(ride)
+    .then(() => {
+      const ids = loadSyncedIds();
+      ids.add(ride.id);
+      writeSyncedIds(ids);
+    })
+    .catch(() => {});
 }
 
-export function deleteRide(id: string): void {
+/**
+ * Delete a ride locally AND on the server. Async so the UI can wait on the
+ * server delete before re-syncing — otherwise the next GET still returns the
+ * ride and the merge step puts it right back ("delete then it came back").
+ * Treat 404 as success (already gone). Throws on other failures so the UI
+ * can show an error and keep the ride visible.
+ */
+export async function deleteRide(id: string): Promise<void> {
   if (typeof window === "undefined") return;
+
+  // Server first. If this fails (and it's not a 404), bail out before we
+  // touch local — that way the UI stays consistent and a retry will work.
+  const res = await fetch(`/api/rides/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 404) {
+    let detail = "";
+    try { detail = await res.text(); } catch {}
+    throw new Error(`delete ${res.status}: ${detail.slice(0, 200)}`);
+  }
+
+  // Now the local side. Removing from syncedIds too — if the user happens to
+  // re-create a ride with the same id later, it should look "new" again.
   const next = loadRides().filter((r) => r.id !== id);
   writeCache(next);
+  const ids = loadSyncedIds();
+  if (ids.delete(id)) writeSyncedIds(ids);
   // Cascade: photos are keyed by ride id in IndexedDB. Fire-and-forget — we don't
   // want a delete UI to wait on it, and orphan cleanup is harmless if it fails.
   deletePhotosForRide(id).catch(() => {});
-  // Also remove from the server. Ignore 404 (already gone) and other errors.
-  fetch(`/api/rides/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {});
 }
 
 async function uploadRide(ride: RideRecord): Promise<void> {
@@ -160,12 +211,22 @@ export async function syncRidesFromServer(): Promise<SyncResult> {
   }
 
   const serverIds = new Set(serverList.map((r) => r.id));
-  const localOnly = local.filter((r) => !serverIds.has(r.id));
+  const syncedIds = loadSyncedIds();
 
-  for (const r of localOnly) {
+  // Local rides missing from the server fall into two buckets:
+  //   - never synced: brand-new ride this device recorded → upload it
+  //   - previously synced: server says it's gone → deleted on another device,
+  //     drop it from local instead of resurrecting it
+  const toUpload = local.filter((r) => !serverIds.has(r.id) && !syncedIds.has(r.id));
+  const deletedElsewhere = new Set(
+    local.filter((r) => !serverIds.has(r.id) && syncedIds.has(r.id)).map((r) => r.id)
+  );
+
+  for (const r of toUpload) {
     try {
       await uploadRide(r);
       result.uploadedCount += 1;
+      syncedIds.add(r.id);
     } catch (e) {
       result.uploadErrors.push(e instanceof Error ? e.message : String(e));
     }
@@ -173,10 +234,22 @@ export async function syncRidesFromServer(): Promise<SyncResult> {
 
   // Merge: prefer the local cache's full record (it has `points`) when we
   // have it; otherwise use the server summary (its `points` will load on
-  // demand). De-dupe by id and sort newest first.
+  // demand). Skip ids the server says were deleted elsewhere.
   const byId = new Map<string, RideRecord>();
   for (const r of serverList) byId.set(r.id, r);
-  for (const r of local) byId.set(r.id, r); // local wins (it has points)
+  for (const r of local) {
+    if (deletedElsewhere.has(r.id)) continue;
+    byId.set(r.id, r); // local wins (it has points)
+  }
+  // Anything still in the map IS on the server now (either it already was, or
+  // we just uploaded it). Mark them all synced and drop syncedIds we no
+  // longer need so the set doesn't grow forever.
+  const liveIds = new Set(byId.keys());
+  for (const id of liveIds) syncedIds.add(id);
+  for (const id of Array.from(syncedIds)) {
+    if (!liveIds.has(id)) syncedIds.delete(id);
+  }
+  writeSyncedIds(syncedIds);
 
   result.rides = Array.from(byId.values()).sort((a, b) => b.startedAt - a.startedAt);
   writeCache(result.rides);

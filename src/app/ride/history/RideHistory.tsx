@@ -53,9 +53,14 @@ export default function RideHistory() {
     setSelected(ride);
   }
 
-  function handleDelete(id: string) {
+  async function handleDelete(id: string) {
     if (!confirm("Delete this ride?")) return;
-    deleteRide(id);
+    try {
+      await deleteRide(id);
+    } catch (e) {
+      alert(`Couldn't delete on server: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    }
     setRides(loadRides());
     if (selected?.id === id) setSelected(null);
   }
