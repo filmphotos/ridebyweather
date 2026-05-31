@@ -74,6 +74,11 @@ export async function GET(req: NextRequest) {
   const lng = parseFloat(searchParams.get("lng") ?? "");
   const radiusMi = parseFloat(searchParams.get("radius") ?? "25");
   const sport = searchParams.get("sport") ?? "cycling";
+  // Dedicated /bike-shops and /run-stores pages pass shopsOnly=1 — skip the
+  // medical/restaurant/bathroom upstream calls (they're invisible there) to
+  // collapse the worst-case response time from ~12s to whatever the slowest
+  // shop source needs (~3–4s).
+  const shopsOnly = searchParams.get("shopsOnly") === "1";
 
   if (isNaN(lat) || isNaN(lng)) {
     return NextResponse.json({ error: "lat and lng required" }, { status: 400 });
@@ -131,17 +136,17 @@ export async function GET(req: NextRequest) {
     isRunning
       ? withTimeout(fetchMapboxShoeStores(lat, lng, radiusMi), [], "mapboxShoeStores")
       : Promise.resolve([]),
-    withTimeout(fetchOsmMedical(lat, lng, radiusMi), [], "osmMedical"),
-    withTimeout(fetchOsmRestaurants(lat, lng, radiusMi), [], "osmRestaurants"),
-    withTimeout(fetchOsmBathrooms(lat, lng, radiusMi), [], "osmBathrooms"),
+    shopsOnly ? Promise.resolve([]) : withTimeout(fetchOsmMedical(lat, lng, radiusMi), [], "osmMedical"),
+    shopsOnly ? Promise.resolve([]) : withTimeout(fetchOsmRestaurants(lat, lng, radiusMi), [], "osmRestaurants"),
+    shopsOnly ? Promise.resolve([]) : withTimeout(fetchOsmBathrooms(lat, lng, radiusMi), [], "osmBathrooms"),
     // Mapbox runs in parallel with OSM Overpass and serves as a fallback when
     // the public Overpass mirrors are overloaded (common in dense urban areas).
     // No Mapbox fallback for bathrooms — their Search Box API has no toilet
     // category. We use Refuge Restrooms (refugerestrooms.org) instead, which
     // has real user upvote/downvote signal and stays up when Overpass throttles.
-    withTimeout(fetchMapboxRestaurants(lat, lng, Math.min(radiusMi, 5)), [], "mapboxRestaurants"),
-    withTimeout(fetchMapboxMedical(lat, lng, Math.min(radiusMi, 10)), [], "mapboxMedical"),
-    withTimeout(fetchRefugeBathrooms(lat, lng, radiusMi), [], "refugeRestrooms"),
+    shopsOnly ? Promise.resolve([]) : withTimeout(fetchMapboxRestaurants(lat, lng, Math.min(radiusMi, 5)), [], "mapboxRestaurants"),
+    shopsOnly ? Promise.resolve([]) : withTimeout(fetchMapboxMedical(lat, lng, Math.min(radiusMi, 10)), [], "mapboxMedical"),
+    shopsOnly ? Promise.resolve([]) : withTimeout(fetchRefugeBathrooms(lat, lng, radiusMi), [], "refugeRestrooms"),
   ]);
 
   const dbPartners = dbCandidates.map((p) => ({

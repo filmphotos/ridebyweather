@@ -150,7 +150,10 @@ export default function NearbyPartners({ lat, lng, sport = "cycling", extras = t
   useEffect(() => {
     setLoading(true);
     const ctrl = new AbortController();
-    fetchPartners({ lat, lng, sport, radiusMi: 25, signal: ctrl.signal })
+    // When the page is hiding extras, ask the server to skip the
+    // medical/restaurant/bathroom upstream calls — they're invisible here and
+    // would otherwise dominate response time (Overpass mirrors can hit 8s).
+    fetchPartners({ lat, lng, sport, radiusMi: 25, shopsOnly: !extras, signal: ctrl.signal })
       .then((d) => {
         setPartners((d.partners ?? []) as Partner[]);
         setMedical((d.medical ?? []) as Partner[]);
@@ -160,7 +163,7 @@ export default function NearbyPartners({ lat, lng, sport = "cycling", extras = t
       .catch(() => {})
       .finally(() => setLoading(false));
     return () => ctrl.abort();
-  }, [lat, lng, sport]);
+  }, [lat, lng, sport, extras]);
 
   if (loading) {
     return (

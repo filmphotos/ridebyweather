@@ -24,6 +24,10 @@ export default function LocationSearch({ onSelect, autoDetect = true, placeholde
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Remember the most recently resolved location so we can bias autocomplete
+  // queries toward the user's area. Without this, "329 main street" matches
+  // identically-named streets in random states.
+  const nearRef = useRef<{ lat: number; lng: number } | null>(null);
 
   const detectLocation = useCallback(async () => {
     const tryBrowserGeo = (): Promise<{ lat: number; lng: number } | null> =>
@@ -45,6 +49,7 @@ export default function LocationSearch({ onSelect, autoDetect = true, placeholde
 
     const browserLoc = await tryBrowserGeo();
     if (browserLoc) {
+      nearRef.current = browserLoc;
       onSelect(browserLoc);
       return;
     }
@@ -53,6 +58,7 @@ export default function LocationSearch({ onSelect, autoDetect = true, placeholde
       if (!res.ok) return;
       const data = await res.json();
       if (typeof data.lat === "number" && typeof data.lng === "number") {
+        nearRef.current = { lat: data.lat, lng: data.lng };
         onSelect({ lat: data.lat, lng: data.lng, name: data.name });
       }
     } catch {
@@ -86,7 +92,11 @@ export default function LocationSearch({ onSelect, autoDetect = true, placeholde
     debounceRef.current = setTimeout(async () => {
       setSearchLoading(true);
       try {
-        const res = await fetch(`/api/geocode?q=${encodeURIComponent(value)}`);
+        const near = nearRef.current;
+        const url = near
+          ? `/api/geocode?q=${encodeURIComponent(value)}&lat=${near.lat}&lng=${near.lng}`
+          : `/api/geocode?q=${encodeURIComponent(value)}`;
+        const res = await fetch(url);
         const json = await res.json();
         setSuggestions(json.results ?? []);
         setShowSuggestions(true);
@@ -100,6 +110,7 @@ export default function LocationSearch({ onSelect, autoDetect = true, placeholde
     setQuery(r.display);
     setSuggestions([]);
     setShowSuggestions(false);
+    nearRef.current = { lat: r.lat, lng: r.lng };
     onSelect({ lat: r.lat, lng: r.lng, name: r.display });
   };
 

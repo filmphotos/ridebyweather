@@ -24,6 +24,13 @@ export async function GET(req: NextRequest) {
 
   const q = parsed.data.q.trim();
 
+  // Optional proximity hint from the caller's last-known location. Mapbox
+  // honors it as a soft bias so addresses near the user surface above
+  // identically-named streets in other states.
+  const nearLat = parseFloat(req.nextUrl.searchParams.get("lat") ?? "");
+  const nearLng = parseFloat(req.nextUrl.searchParams.get("lng") ?? "");
+  const near = !isNaN(nearLat) && !isNaN(nearLng) ? { lat: nearLat, lng: nearLng } : undefined;
+
   // A bare 5-digit ZIP: Open-Meteo doesn't index US ZIPs reliably, so resolve
   // it directly via Zippopotam.us (free, no key, no auth).
   if (/^\d{5}$/.test(q)) {
@@ -61,8 +68,9 @@ export async function GET(req: NextRequest) {
 
   // Open-Meteo only indexes place names (cities/towns), so street addresses
   // return nothing. Mapbox forward geocoding handles addresses, POIs, cities
-  // and ZIPs — use it first when a token is configured.
-  const mapboxResults = await geocodeMapbox(mapboxQuery, proximity);
+  // and ZIPs — use it first when a token is configured. ZIP-anchored proximity
+  // wins over the caller-supplied hint because it's more precise to the query.
+  const mapboxResults = await geocodeMapbox(mapboxQuery, proximity ?? near);
   if (mapboxResults && mapboxResults.length > 0) {
     return NextResponse.json({ results: mapboxResults });
   }
@@ -135,7 +143,7 @@ async function geocodeMapbox(
 
   let url =
     `https://api.mapbox.com/search/geocode/v6/forward?q=${encodeURIComponent(q)}` +
-    `&limit=6&autocomplete=true&language=en&access_token=${encodeURIComponent(token)}`;
+    `&limit=6&autocomplete=true&language=en&country=us&access_token=${encodeURIComponent(token)}`;
   if (proximity) url += `&proximity=${proximity.lng},${proximity.lat}`;
 
   try {

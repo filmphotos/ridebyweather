@@ -21,9 +21,9 @@ type CacheEntry = { at: number; data: PartnersResponse | Promise<PartnersRespons
 const CACHE = new Map<string, CacheEntry>();
 const TTL_MS = 30_000;
 
-function key(lat: number, lng: number, sport: string, radiusMi: number): string {
+function key(lat: number, lng: number, sport: string, radiusMi: number, shopsOnly: boolean): string {
   // Round to 4 dp (~11 m) so trivial GPS jitter doesn't bust the cache.
-  return `${lat.toFixed(4)}:${lng.toFixed(4)}:${sport}:${radiusMi}`;
+  return `${lat.toFixed(4)}:${lng.toFixed(4)}:${sport}:${radiusMi}:${shopsOnly ? "s" : "f"}`;
 }
 
 export interface FetchPartnersOptions {
@@ -31,12 +31,15 @@ export interface FetchPartnersOptions {
   lng: number;
   sport?: string;
   radiusMi?: number;
+  // When true, server skips the medical/restaurant/bathroom upstream calls.
+  // Use on dedicated shop directory pages to avoid waiting on Overpass etc.
+  shopsOnly?: boolean;
   signal?: AbortSignal;
 }
 
 export async function fetchPartners(opts: FetchPartnersOptions): Promise<PartnersResponse> {
-  const { lat, lng, sport = "cycling", radiusMi = 25, signal } = opts;
-  const k = key(lat, lng, sport, radiusMi);
+  const { lat, lng, sport = "cycling", radiusMi = 25, shopsOnly = false, signal } = opts;
+  const k = key(lat, lng, sport, radiusMi, shopsOnly);
   const hit = CACHE.get(k);
   if (hit && Date.now() - hit.at < TTL_MS) {
     // Resolved value OR in-flight promise — both awaitable.
@@ -49,7 +52,7 @@ export async function fetchPartners(opts: FetchPartnersOptions): Promise<Partner
   // racing the shared promise against an abort rejection.
   const work: Promise<PartnersResponse> = (async () => {
     const res = await fetch(
-      `/api/partners?lat=${lat}&lng=${lng}&sport=${encodeURIComponent(sport)}&radius=${radiusMi}`,
+      `/api/partners?lat=${lat}&lng=${lng}&sport=${encodeURIComponent(sport)}&radius=${radiusMi}${shopsOnly ? "&shopsOnly=1" : ""}`,
       { credentials: "include" }
     );
     if (!res.ok) throw new Error(`Partners ${res.status}`);
