@@ -1,0 +1,51 @@
+name: Storm push alert check
+
+# Pings /api/push/check-storms every 15 minutes so storm push notifications
+# fire even on Vercel Hobby (which blocks sub-daily crons). This is the
+# free-tier alternative to a Vercel cron — no signup, no external service.
+#
+# The Authorization header carries the CRON_SECRET, which must match the
+# CRON_SECRET env var on Vercel. Set both:
+#   - GitHub: Settings → Secrets and variables → Actions → New secret
+#       Name: CRON_SECRET, Value: any long random string
+#   - Vercel: Settings → Environment Variables → Production
+#       Name: CRON_SECRET, Value: same string
+# The deploy URL is set as a separate secret so dev/staging branches can
+# point at their own deployment without code changes.
+#   - GitHub secret RIDEBYWEATHER_URL, e.g. https://ridebyweather.com
+
+on:
+  schedule:
+    # GitHub Actions cron uses UTC. "*/15 * * * *" = every 15 minutes.
+    # Note: GitHub Actions can delay scheduled jobs by 5-15 min under load;
+    # for stricter timing, upgrade to a Vercel cron on Pro.
+    - cron: "*/15 * * * *"
+  # Allow manual triggering from the Actions tab for testing.
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    # Don't burn an Actions minute on every retry — fail fast.
+    timeout-minutes: 2
+    steps:
+      - name: Hit /api/push/check-storms
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          RIDEBYWEATHER_URL: ${{ secrets.RIDEBYWEATHER_URL }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET secret is not set in this repo"
+            exit 1
+          fi
+          if [ -z "$RIDEBYWEATHER_URL" ]; then
+            echo "::error::RIDEBYWEATHER_URL secret is not set in this repo"
+            exit 1
+          fi
+          # -f makes curl exit non-zero on HTTP 4xx/5xx so the workflow
+          # shows red in the Actions tab if auth or the endpoint is broken.
+          # -sS keeps it silent on success but still surfaces errors.
+          curl -fsS \
+            -X GET \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${RIDEBYWEATHER_URL%/}/api/push/check-storms"
