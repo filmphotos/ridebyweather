@@ -22,6 +22,65 @@ interface RideRestaurant {
   distanceMi: number;
 }
 
+type CleanTier = "likely_clean" | "basic" | "caution" | "unrated";
+
+interface RideBathroom {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  distanceMi: number;
+  cleanTier: CleanTier;
+  cleanReasons: string[];
+  openingHours: string | null;
+  source?: "refuge" | "osm";
+}
+
+type MedicalType = "hospital" | "urgent_care" | "clinic";
+
+interface RideMedical {
+  id: string;
+  name: string;
+  type: MedicalType;
+  lat: number;
+  lng: number;
+  distanceMi: number;
+  address: string | null;
+  phone: string | null;
+}
+
+const CLEAN_TIER_LABEL: Record<CleanTier, string> = {
+  likely_clean: "Likely clean",
+  basic: "Basic",
+  caution: "Use caution",
+  unrated: "Unrated",
+};
+
+const CLEAN_TIER_COLOR: Record<CleanTier, string> = {
+  likely_clean: "bg-emerald-600",
+  basic: "bg-sky-600",
+  caution: "bg-rose-600",
+  unrated: "bg-gray-600",
+};
+
+const MEDICAL_LABEL: Record<MedicalType, string> = {
+  hospital: "Hospital",
+  urgent_care: "Urgent care",
+  clinic: "Clinic",
+};
+
+const MEDICAL_COLOR: Record<MedicalType, string> = {
+  hospital: "bg-red-600",
+  urgent_care: "bg-pink-600",
+  clinic: "bg-rose-500",
+};
+
+const MEDICAL_EMOJI: Record<MedicalType, string> = {
+  hospital: "🏥",
+  urgent_care: "➕",
+  clinic: "🩺",
+};
+
 interface RoadClosure {
   id: string;
   lat: number;
@@ -69,6 +128,15 @@ export default function RideMap({ points, heading, windDirDeg, windSpeedMph }: P
   const [restaurants, setRestaurants] = useState<RideRestaurant[]>([]);
   const [showRestaurants, setShowRestaurants] = useState(true);
   const [selected, setSelected] = useState<RideRestaurant | null>(null);
+
+  const [bathrooms, setBathrooms] = useState<RideBathroom[]>([]);
+  const [showBathrooms, setShowBathrooms] = useState(true);
+  const [selectedBathroom, setSelectedBathroom] = useState<RideBathroom | null>(null);
+
+  const [medical, setMedical] = useState<RideMedical[]>([]);
+  const [showMedical, setShowMedical] = useState(true);
+  const [selectedMedical, setSelectedMedical] = useState<RideMedical | null>(null);
+
   const [mapError, setMapError] = useState<string | null>(null);
   const lastFetchRef = useRef<{ lat: number; lng: number } | null>(null);
 
@@ -93,6 +161,8 @@ export default function RideMap({ points, heading, windDirDeg, windSpeedMph }: P
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d && Array.isArray(d.restaurants)) setRestaurants(d.restaurants as RideRestaurant[]);
+        if (d && Array.isArray(d.bathrooms)) setBathrooms(d.bathrooms as RideBathroom[]);
+        if (d && Array.isArray(d.medical)) setMedical(d.medical as RideMedical[]);
       })
       .catch(() => {});
     return () => ctrl.abort();
@@ -309,6 +379,107 @@ export default function RideMap({ points, heading, windDirDeg, windSpeedMph }: P
           </Marker>
         )}
 
+        {/* Nearby bathrooms — color-coded by estimated cleanliness */}
+        {showBathrooms && bathrooms.map((b) => (
+          <Marker
+            key={b.id}
+            longitude={b.lng}
+            latitude={b.lat}
+            anchor="bottom"
+            onClick={(e) => {
+              e.originalEvent.stopPropagation();
+              setSelectedBathroom(b);
+            }}
+          >
+            <div
+              title={`${b.name} · ${CLEAN_TIER_LABEL[b.cleanTier]} · ${b.distanceMi.toFixed(1)} mi`}
+              className={`flex h-6 w-6 items-center justify-center rounded-full border-2 border-white shadow-lg cursor-pointer text-[12px] ${CLEAN_TIER_COLOR[b.cleanTier]}`}
+            >
+              🚻
+            </div>
+          </Marker>
+        ))}
+
+        {selectedBathroom && (
+          <Marker
+            longitude={selectedBathroom.lng}
+            latitude={selectedBathroom.lat}
+            anchor="bottom"
+            offset={[0, -28]}
+          >
+            <div className="rounded-lg border border-emerald-500/50 bg-gray-900/95 backdrop-blur-sm px-3 py-2 text-xs shadow-xl min-w-[180px] max-w-[240px]">
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-semibold text-white truncate">{selectedBathroom.name}</span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setSelectedBathroom(null); }}
+                  className="text-gray-500 hover:text-gray-300 text-base leading-none"
+                  aria-label="Close"
+                >×</button>
+              </div>
+              <p className="text-emerald-400 mt-0.5">
+                {CLEAN_TIER_LABEL[selectedBathroom.cleanTier]} · {selectedBathroom.distanceMi.toFixed(1)} mi
+              </p>
+              {selectedBathroom.cleanReasons.length > 0 && (
+                <p className="mt-1 text-gray-400">{selectedBathroom.cleanReasons.join(" · ")}</p>
+              )}
+            </div>
+          </Marker>
+        )}
+
+        {/* Hospitals, urgent care, clinics */}
+        {showMedical && medical.map((m) => (
+          <Marker
+            key={m.id}
+            longitude={m.lng}
+            latitude={m.lat}
+            anchor="bottom"
+            onClick={(e) => {
+              e.originalEvent.stopPropagation();
+              setSelectedMedical(m);
+            }}
+          >
+            <div
+              title={`${m.name} · ${MEDICAL_LABEL[m.type]} · ${m.distanceMi.toFixed(1)} mi`}
+              className={`flex h-6 w-6 items-center justify-center rounded-full border-2 border-white shadow-lg cursor-pointer text-[12px] ${MEDICAL_COLOR[m.type]}`}
+            >
+              {MEDICAL_EMOJI[m.type]}
+            </div>
+          </Marker>
+        ))}
+
+        {selectedMedical && (
+          <Marker
+            longitude={selectedMedical.lng}
+            latitude={selectedMedical.lat}
+            anchor="bottom"
+            offset={[0, -28]}
+          >
+            <div className="rounded-lg border border-red-500/50 bg-gray-900/95 backdrop-blur-sm px-3 py-2 text-xs shadow-xl min-w-[180px] max-w-[240px]">
+              <div className="flex items-start justify-between gap-2">
+                <span className="font-semibold text-white truncate">{selectedMedical.name}</span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setSelectedMedical(null); }}
+                  className="text-gray-500 hover:text-gray-300 text-base leading-none"
+                  aria-label="Close"
+                >×</button>
+              </div>
+              <p className="text-red-400 mt-0.5">
+                {MEDICAL_LABEL[selectedMedical.type]} · {selectedMedical.distanceMi.toFixed(1)} mi
+              </p>
+              {selectedMedical.phone && (
+                <a href={`tel:${selectedMedical.phone}`} className="mt-1 block text-sky-400 hover:underline">
+                  📞 {selectedMedical.phone}
+                </a>
+              )}
+              {selectedMedical.address && (
+                <p className="mt-1 text-gray-400 truncate">{selectedMedical.address}</p>
+              )}
+            </div>
+          </Marker>
+        )}
+
         {/* Rider-reported road closures & hazards */}
         {closures.map((c) => {
           const ring =
@@ -420,20 +591,48 @@ export default function RideMap({ points, heading, windDirDeg, windSpeedMph }: P
         </button>
       </div>
 
-      {/* Food toggle — bottom-left, mirrors the wind chip */}
-      <button
-        type="button"
-        onClick={() => setShowRestaurants((v) => !v)}
-        className={`absolute bottom-3 left-3 flex items-center gap-1.5 rounded-xl bg-gray-900/85 backdrop-blur-sm px-2.5 py-1.5 border text-xs transition-colors ${
-          showRestaurants
-            ? "border-amber-500/40 text-amber-400"
-            : "border-gray-700/60 text-gray-500 hover:text-gray-300"
-        }`}
-        aria-pressed={showRestaurants}
-      >
-        <span className="text-sm leading-none">🍽</span>
-        Food {showRestaurants ? `(${restaurants.length})` : "off"}
-      </button>
+      {/* Layer toggles — bottom-left, mirror the wind chip */}
+      <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-1.5 max-w-[calc(100%-1.5rem)]">
+        <button
+          type="button"
+          onClick={() => setShowRestaurants((v) => !v)}
+          className={`flex items-center gap-1.5 rounded-xl bg-gray-900/85 backdrop-blur-sm px-2.5 py-1.5 border text-xs transition-colors ${
+            showRestaurants
+              ? "border-amber-500/40 text-amber-400"
+              : "border-gray-700/60 text-gray-500 hover:text-gray-300"
+          }`}
+          aria-pressed={showRestaurants}
+        >
+          <span className="text-sm leading-none">🍽</span>
+          Food {showRestaurants ? `(${restaurants.length})` : "off"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowBathrooms((v) => !v)}
+          className={`flex items-center gap-1.5 rounded-xl bg-gray-900/85 backdrop-blur-sm px-2.5 py-1.5 border text-xs transition-colors ${
+            showBathrooms
+              ? "border-emerald-500/40 text-emerald-400"
+              : "border-gray-700/60 text-gray-500 hover:text-gray-300"
+          }`}
+          aria-pressed={showBathrooms}
+        >
+          <span className="text-sm leading-none">🚻</span>
+          Restrooms {showBathrooms ? `(${bathrooms.length})` : "off"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowMedical((v) => !v)}
+          className={`flex items-center gap-1.5 rounded-xl bg-gray-900/85 backdrop-blur-sm px-2.5 py-1.5 border text-xs transition-colors ${
+            showMedical
+              ? "border-red-500/40 text-red-400"
+              : "border-gray-700/60 text-gray-500 hover:text-gray-300"
+          }`}
+          aria-pressed={showMedical}
+        >
+          <span className="text-sm leading-none">🏥</span>
+          Medical {showMedical ? `(${medical.length})` : "off"}
+        </button>
+      </div>
 
       {/* Wind overlay */}
       {windDirDeg != null && windSpeedMph != null && (

@@ -53,6 +53,38 @@ interface Restaurant {
   distanceMi: number;
 }
 
+type MedicalType = "hospital" | "urgent_care" | "clinic";
+
+interface Medical {
+  id: string;
+  name: string;
+  type: MedicalType;
+  lat: number;
+  lng: number;
+  distanceMi: number;
+  address: string | null;
+  phone: string | null;
+  website: string | null;
+}
+
+const MEDICAL_LABEL: Record<MedicalType, string> = {
+  hospital: "Hospital",
+  urgent_care: "Urgent care",
+  clinic: "Clinic",
+};
+
+const MEDICAL_COLOR: Record<MedicalType, string> = {
+  hospital: "bg-red-600",
+  urgent_care: "bg-pink-600",
+  clinic: "bg-rose-500",
+};
+
+const MEDICAL_EMOJI: Record<MedicalType, string> = {
+  hospital: "🏥",
+  urgent_care: "➕",
+  clinic: "🩺",
+};
+
 type CleanTier = "likely_clean" | "basic" | "caution" | "unrated";
 
 interface Bathroom {
@@ -171,6 +203,11 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph, sport = "
   const [showBathrooms, setShowBathrooms] = useState(true);
   const [selectedBathroom, setSelectedBathroom] = useState<Bathroom | null>(null);
 
+  // Medical overlay — hospitals, urgent care, clinics
+  const [medical, setMedical] = useState<Medical[]>([]);
+  const [showMedical, setShowMedical] = useState(true);
+  const [selectedMedical, setSelectedMedical] = useState<Medical | null>(null);
+
   // Surface map-init failures (bad token, style fetch error, missing WebGL)
   // instead of silently rendering a blank container.
   const [mapError, setMapError] = useState<string | null>(null);
@@ -194,6 +231,7 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph, sport = "
       .then((d) => {
         if (Array.isArray(d.restaurants)) setRestaurants(d.restaurants as Restaurant[]);
         if (Array.isArray(d.bathrooms)) setBathrooms(d.bathrooms as Bathroom[]);
+        if (Array.isArray(d.medical)) setMedical(d.medical as Medical[]);
       })
       .catch(() => {});
     return () => ctrl.abort();
@@ -702,6 +740,59 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph, sport = "
             </Marker>
           ))}
 
+          {/* Medical pins — hospitals, urgent care, clinics */}
+          {showMedical && medical.map((m) => (
+            <Marker
+              key={m.id}
+              longitude={m.lng}
+              latitude={m.lat}
+              anchor="bottom"
+              onClick={(e) => {
+                e.originalEvent.stopPropagation();
+                setSelectedMedical(m);
+              }}
+            >
+              <div
+                title={`${m.name} — ${MEDICAL_LABEL[m.type]} · ${m.distanceMi.toFixed(1)} mi`}
+                className={`flex h-6 w-6 items-center justify-center rounded-full border-2 border-white shadow-lg cursor-pointer text-[12px] ${MEDICAL_COLOR[m.type]}`}
+              >
+                {MEDICAL_EMOJI[m.type]}
+              </div>
+            </Marker>
+          ))}
+
+          {selectedMedical && (
+            <Marker
+              longitude={selectedMedical.lng}
+              latitude={selectedMedical.lat}
+              anchor="bottom"
+              offset={[0, -28]}
+            >
+              <div className="rounded-lg border border-red-500/50 bg-gray-900/95 backdrop-blur-sm px-3 py-2 text-xs shadow-xl min-w-[200px] max-w-[260px]">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="font-semibold text-white truncate">{selectedMedical.name}</span>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setSelectedMedical(null); }}
+                    className="text-gray-500 hover:text-gray-300 text-base leading-none"
+                    aria-label="Close"
+                  >×</button>
+                </div>
+                <p className="text-red-400 mt-0.5">
+                  {MEDICAL_LABEL[selectedMedical.type]} · {selectedMedical.distanceMi.toFixed(1)} mi
+                </p>
+                {selectedMedical.phone && (
+                  <a href={`tel:${selectedMedical.phone}`} className="mt-1 block text-sky-400 hover:underline">
+                    📞 {selectedMedical.phone}
+                  </a>
+                )}
+                {selectedMedical.address && (
+                  <p className="mt-1 text-gray-400 truncate">{selectedMedical.address}</p>
+                )}
+              </div>
+            </Marker>
+          )}
+
           {selectedBathroom && (
             <Marker
               longitude={selectedBathroom.lng}
@@ -811,6 +902,16 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph, sport = "
         >
           <span className="inline-flex h-3 w-3 items-center justify-center rounded-full bg-emerald-600 border border-white text-[8px] leading-none">🚻</span>
           Bathrooms {showBathrooms ? `(${bathrooms.length})` : "off"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowMedical((v) => !v)}
+          className={`flex items-center gap-1.5 transition-colors ${showMedical ? "text-red-400" : "text-gray-600 hover:text-gray-400"}`}
+          aria-pressed={showMedical}
+          title="Toggle hospitals, urgent care, and clinics"
+        >
+          <span className="inline-flex h-3 w-3 items-center justify-center rounded-full bg-red-600 border border-white text-[8px] leading-none">🏥</span>
+          Medical {showMedical ? `(${medical.length})` : "off"}
         </button>
       </div>
 
