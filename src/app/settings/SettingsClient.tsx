@@ -1,8 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import StormAlertsToggle from "@/components/Notifications/StormAlertsToggle";
+import { loadRides, syncRidesFromServer } from "@/lib/ride/rideStorage";
+import { totalCalories } from "@/lib/ride/calories";
 
 interface Prefs {
   preferredUnit: "imperial" | "metric";
@@ -12,6 +14,7 @@ interface Prefs {
   dislikeWind: boolean;
   temperatureMin: number | null;
   temperatureMax: number | null;
+  weightLb: number | null;
 }
 
 const DEFAULT: Prefs = {
@@ -22,7 +25,11 @@ const DEFAULT: Prefs = {
   dislikeWind: false,
   temperatureMin: null,
   temperatureMax: null,
+  weightLb: null,
 };
+
+const KG_TO_LB = 2.20462262;
+const LB_TO_KG = 0.45359237;
 
 export default function SettingsClient() {
   return (
@@ -189,6 +196,16 @@ function SettingsInner() {
               Rides outside this range score lower. Leave blank to use defaults.
             </p>
           </div>
+        </Section>
+
+        {/* Calories */}
+        <Section title="Calories Burned">
+          <CaloriesPanel
+            weightLb={prefs.weightLb}
+            preferredUnit={prefs.preferredUnit}
+            ebikeMode={prefs.ebikeMode}
+            onWeightChange={(v) => set("weightLb", v)}
+          />
         </Section>
 
         {/* Notifications */}
@@ -543,6 +560,104 @@ function EmergencyContacts() {
           {busy ? "Adding…" : "Add contact"}
         </button>
       </form>
+    </div>
+  );
+}
+
+function CaloriesPanel({
+  weightLb,
+  preferredUnit,
+  ebikeMode,
+  onWeightChange,
+}: {
+  weightLb: number | null;
+  preferredUnit: "imperial" | "metric";
+  ebikeMode: boolean;
+  onWeightChange: (v: number | null) => void;
+}) {
+  const [rideCount, setRideCount] = useState<number | null>(null);
+  const [kcal, setKcal] = useState<number>(0);
+
+  // Sync from the server so the total reflects rides from every device, not
+  // just whatever this browser cached.
+  useEffect(() => {
+    syncRidesFromServer()
+      .then((r) => {
+        setRideCount(r.rides.length);
+        setKcal(totalCalories(r.rides, weightLb, ebikeMode));
+      })
+      .catch(() => {
+        const local = loadRides();
+        setRideCount(local.length);
+        setKcal(totalCalories(local, weightLb, ebikeMode));
+      });
+  }, [weightLb, ebikeMode]);
+
+  const isMetric = preferredUnit === "metric";
+  const unitLabel = isMetric ? "kg" : "lb";
+  const displayValue = useMemo(() => {
+    if (weightLb == null) return "";
+    return isMetric
+      ? (weightLb * LB_TO_KG).toFixed(1)
+      : String(Math.round(weightLb));
+  }, [weightLb, isMetric]);
+
+  function handleInput(raw: string) {
+    if (raw === "") return onWeightChange(null);
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return;
+    onWeightChange(isMetric ? n * KG_TO_LB : n);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-1.5">
+          Your weight ({unitLabel})
+        </label>
+        <input
+          type="number"
+          inputMode="decimal"
+          step={isMetric ? "0.1" : "1"}
+          min="0"
+          placeholder={isMetric ? "e.g. 75" : "e.g. 165"}
+          value={displayValue}
+          onChange={(e) => handleInput(e.target.value)}
+          className="w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+        />
+        <p className="text-xs text-gray-500 mt-2">
+          We use this to estimate calories burned per ride. Stored on your
+          account only.
+        </p>
+      </div>
+
+      <div className="rounded-xl border border-gray-800 bg-gray-900/50 px-4 py-3">
+        {weightLb == null ? (
+          <p className="text-sm text-gray-500">
+            Enter your weight to see calorie totals.
+          </p>
+        ) : rideCount === null ? (
+          <p className="text-sm text-gray-500">Calculating…</p>
+        ) : rideCount === 0 ? (
+          <p className="text-sm text-gray-500">
+            No rides yet — your total will show up once you finish one.
+          </p>
+        ) : (
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-gray-500">
+              Total burned
+            </div>
+            <div className="text-3xl font-bold text-amber-400 tabular-nums mt-0.5">
+              {kcal.toLocaleString()}
+              <span className="ml-1 text-sm text-gray-500 font-normal">kcal</span>
+            </div>
+            <div className="text-xs text-gray-500 mt-1">
+              across {rideCount} ride{rideCount === 1 ? "" : "s"}
+              {ebikeMode && " · e-bike assist factored in"}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

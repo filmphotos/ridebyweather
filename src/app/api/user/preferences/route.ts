@@ -11,6 +11,7 @@ const PrefsSchema = z.object({
   dislikeWind: z.boolean().optional(),
   temperatureMin: z.number().nullable().optional(),
   temperatureMax: z.number().nullable().optional(),
+  weightLb: z.number().positive().max(1000).nullable().optional(),
 });
 
 async function getUser(req: NextRequest) {
@@ -38,6 +39,7 @@ export async function GET(req: NextRequest) {
       dislikeWind: false,
       temperatureMin: null,
       temperatureMax: null,
+      weightLb: null,
     });
   }
 

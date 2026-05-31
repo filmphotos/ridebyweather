@@ -13,6 +13,7 @@ import {
   type SyncResult,
 } from "@/lib/ride/rideStorage";
 import { fmtDuration } from "@/lib/ride/rideMath";
+import { estimateRideCalories } from "@/lib/ride/calories";
 import RidePhotos from "@/components/RidePhotos/RidePhotos";
 
 const RideRouteMap = dynamic(() => import("./RideRouteMap"), { ssr: false });
@@ -22,6 +23,19 @@ export default function RideHistory() {
   const [selected, setSelected] = useState<RideRecord | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncInfo, setSyncInfo] = useState<SyncResult | null>(null);
+  const [weightLb, setWeightLb] = useState<number | null>(null);
+  const [ebikeMode, setEbikeMode] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/user/preferences")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setWeightLb(typeof d.weightLb === "number" ? d.weightLb : null);
+        setEbikeMode(!!d.ebikeMode);
+      })
+      .catch(() => {});
+  }, []);
 
   async function runSync() {
     setSyncing(true);
@@ -198,7 +212,21 @@ export default function RideHistory() {
               {selected.maxHrBpm != null && (
                 <Stat label="Max HR" value={`${selected.maxHrBpm} bpm`} color="rose" />
               )}
+              {(() => {
+                const kcal = estimateRideCalories(selected, weightLb, ebikeMode);
+                return kcal != null ? (
+                  <Stat label="Calories" value={`${kcal.toLocaleString()} kcal`} color="amber" />
+                ) : null;
+              })()}
             </div>
+            {weightLb == null && (
+              <p className="mt-2 text-xs text-gray-500">
+                <Link href="/settings" className="text-sky-400 hover:text-sky-300">
+                  Add your weight in Settings
+                </Link>{" "}
+                to see calories burned.
+              </p>
+            )}
 
             {selected.points.length >= 2 && (
               <div className="mt-5">
