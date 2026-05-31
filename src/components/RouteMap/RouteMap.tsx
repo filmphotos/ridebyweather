@@ -5,6 +5,7 @@ import { Map, Source, Layer, Marker, NavigationControl } from "react-map-gl/mapb
 import type { MapMouseEvent } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import ElevationProfile from "@/components/RouteMap/ElevationProfile";
+import RouteForecastTimeline from "@/components/RouteMap/RouteForecastTimeline";
 import { fetchPartners } from "@/lib/partnersClient";
 
 type Sport = "cycling" | "running" | "walking";
@@ -919,6 +920,13 @@ export default function RouteMap({ lat, lng, windDirDeg, windSpeedMph, sport = "
         <p className="mt-3 text-center text-xs text-gray-500">
           <a href="/signup" className="text-sky-400 hover:underline">Sign up</a> to save routes
         </p>
+      )}
+
+      {/* Pro: 24-hour route-aware Ride Score timeline. Hidden until the user
+          has actually drawn something — paywall and forecast both come from
+          the API so we don't make calls for empty routes. */}
+      {isLoggedIn && pathCoords.length >= 2 && (
+        <RouteForecastTimeline waypoints={pathCoords as [number, number][]} />
       )}
 
     </div>
