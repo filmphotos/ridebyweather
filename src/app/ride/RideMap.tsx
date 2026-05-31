@@ -5,6 +5,7 @@ import { Map, Source, Layer, Marker, NavigationControl } from "react-map-gl/mapb
 import type { MapRef } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { TrackPoint } from "@/lib/ride/rideMath";
+import { fetchPartners } from "@/lib/partnersClient";
 
 interface Props {
   points: TrackPoint[];
@@ -154,15 +155,21 @@ export default function RideMap({ points, heading, windDirDeg, windSpeedMph }: P
     if (last && haversineM(last.lat, last.lng, current.lat, current.lng) < REFETCH_DISTANCE_M) return;
     lastFetchRef.current = { lat: current.lat, lng: current.lng };
     const ctrl = new AbortController();
-    fetch(
-      `/api/partners?lat=${current.lat}&lng=${current.lng}&sport=cycling&radius=10`,
-      { signal: ctrl.signal }
-    )
-      .then((r) => (r.ok ? r.json() : null))
+    // 25 mi matches the route-planner map. With radius=10 the live map came
+    // back empty for bathrooms + medical on rural rides where the nearest
+    // facility is 12–20 mi away. Using fetchPartners also lets us piggyback
+    // on the dashboard's cache when the user navigates here from /cycling.
+    fetchPartners({
+      lat: current.lat,
+      lng: current.lng,
+      sport: "cycling",
+      radiusMi: 25,
+      signal: ctrl.signal,
+    })
       .then((d) => {
-        if (d && Array.isArray(d.restaurants)) setRestaurants(d.restaurants as RideRestaurant[]);
-        if (d && Array.isArray(d.bathrooms)) setBathrooms(d.bathrooms as RideBathroom[]);
-        if (d && Array.isArray(d.medical)) setMedical(d.medical as RideMedical[]);
+        if (Array.isArray(d.restaurants)) setRestaurants(d.restaurants as RideRestaurant[]);
+        if (Array.isArray(d.bathrooms)) setBathrooms(d.bathrooms as RideBathroom[]);
+        if (Array.isArray(d.medical)) setMedical(d.medical as RideMedical[]);
       })
       .catch(() => {});
     return () => ctrl.abort();
