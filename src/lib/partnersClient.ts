@@ -12,6 +12,9 @@ export interface PartnersResponse {
   medical?: unknown[];
   restaurants?: unknown[];
   bathrooms?: unknown[];
+  // Raw per-source counts (pre-filter). The shape varies by sport — surfaced
+  // in the empty-state UI so we can see whether a source is dry or broken.
+  sources?: Record<string, number>;
 }
 
 type CacheEntry = { at: number; data: PartnersResponse | Promise<PartnersResponse> };

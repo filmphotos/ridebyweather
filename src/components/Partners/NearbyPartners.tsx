@@ -24,6 +24,9 @@ interface Props {
   // shop listings render. Dashboards leave it true to also surface nearby
   // medical and restaurant stops.
   extras?: boolean;
+  // Override the heading. Defaults to "Nearby Bike Shops" / "Nearby Shoe
+  // Stores" based on `sport`.
+  shopsTitle?: string;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -136,10 +139,12 @@ function PartnerRow({ p }: { p: Partner }) {
   );
 }
 
-export default function NearbyPartners({ lat, lng, sport = "cycling", extras = true }: Props) {
+export default function NearbyPartners({ lat, lng, sport = "cycling", extras = true, shopsTitle }: Props) {
+  const heading = shopsTitle ?? (sport === "running" ? "Nearby Shoe Stores" : "Nearby Bike Shops");
   const [partners, setPartners] = useState<Partner[]>([]);
   const [medical, setMedical] = useState<Partner[]>([]);
   const [restaurants, setRestaurants] = useState<Partner[]>([]);
+  const [sources, setSources] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -150,6 +155,7 @@ export default function NearbyPartners({ lat, lng, sport = "cycling", extras = t
         setPartners((d.partners ?? []) as Partner[]);
         setMedical((d.medical ?? []) as Partner[]);
         setRestaurants((d.restaurants ?? []) as Partner[]);
+        setSources(d.sources ?? null);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -159,7 +165,7 @@ export default function NearbyPartners({ lat, lng, sport = "cycling", extras = t
   if (loading) {
     return (
       <div className="card">
-        <h3 className="font-semibold text-white mb-3">Nearby Shops</h3>
+        <h3 className="font-semibold text-white mb-3">{heading}</h3>
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-16 rounded-lg bg-gray-800 animate-pulse" />
@@ -172,7 +178,7 @@ export default function NearbyPartners({ lat, lng, sport = "cycling", extras = t
   return (
     <div className="card">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="font-semibold text-white">Nearby Shops</h3>
+        <h3 className="font-semibold text-white">{heading}</h3>
         <span className="text-xs text-gray-500">within 25 mi</span>
       </div>
       {partners.length > 0 ? (
@@ -189,7 +195,14 @@ export default function NearbyPartners({ lat, lng, sport = "cycling", extras = t
         </>
       ) : (
         <>
-          <p className="text-xs text-gray-500">No partner shops found within 25 miles.</p>
+          <p className="text-xs text-gray-500">
+            No {sport === "running" ? "shoe stores" : "shops"} found within 25 miles.
+          </p>
+          {sources && (
+            <p className="mt-1 text-[10px] text-gray-600 font-mono">
+              sources: {Object.entries(sources).map(([k, v]) => `${k} ${v}`).join(", ")}
+            </p>
+          )}
           <a
             href="mailto:partners@ridebyweather.com"
             className="mt-3 inline-block text-xs text-sky-400 hover:underline"

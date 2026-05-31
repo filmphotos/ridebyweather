@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { fetchOsmBikeShops } from "@/lib/osmPartners";
+import { fetchOsmShoeStores } from "@/lib/osmShoeStores";
 import {
   fetchMapboxBikeShops,
   fetchMapboxRestaurants,
   fetchMapboxMedical,
+  fetchMapboxShoeStores,
 } from "@/lib/mapboxSearch";
 import { fetchFoursquareBikeShops } from "@/lib/foursquarePlaces";
 import { fetchYelpBikeShops } from "@/lib/yelpSearch";
@@ -80,7 +82,23 @@ export async function GET(req: NextRequest) {
   const latDelta = radiusMi / 69;
   const lngDelta = radiusMi / (69 * Math.cos((lat * Math.PI) / 180));
 
-  const [dbCandidates, yelpC, fsqC, mapboxC, osmC, medicalC, restaurantC, bathroomC, mapboxRestaurantC, mapboxMedicalC, refugeC] = await Promise.all([
+  const isRunning = sport === "running";
+
+  const [
+    dbCandidates,
+    yelpC,
+    fsqC,
+    mapboxC,
+    osmC,
+    osmShoeC,
+    mapboxShoeC,
+    medicalC,
+    restaurantC,
+    bathroomC,
+    mapboxRestaurantC,
+    mapboxMedicalC,
+    refugeC,
+  ] = await Promise.all([
     withTimeout(
       db.partnerListing.findMany({
         where: {
@@ -92,10 +110,27 @@ export async function GET(req: NextRequest) {
       [],
       "db.partnerListing"
     ),
-    withTimeout(fetchYelpBikeShops(lat, lng, radiusMi), [], "yelp"),
-    withTimeout(fetchFoursquareBikeShops(lat, lng, radiusMi), [], "foursquare"),
-    withTimeout(fetchMapboxBikeShops(lat, lng, radiusMi), [], "mapboxBikeShops"),
-    withTimeout(fetchOsmBikeShops(lat, lng, radiusMi), [], "osmBikeShops"),
+    // Bike-shop sources only run for cycling — running/walking pages should
+    // not waste budget on bike-specific lookups.
+    isRunning
+      ? Promise.resolve([])
+      : withTimeout(fetchYelpBikeShops(lat, lng, radiusMi), [], "yelp"),
+    isRunning
+      ? Promise.resolve([])
+      : withTimeout(fetchFoursquareBikeShops(lat, lng, radiusMi), [], "foursquare"),
+    isRunning
+      ? Promise.resolve([])
+      : withTimeout(fetchMapboxBikeShops(lat, lng, radiusMi), [], "mapboxBikeShops"),
+    isRunning
+      ? Promise.resolve([])
+      : withTimeout(fetchOsmBikeShops(lat, lng, radiusMi), [], "osmBikeShops"),
+    // Shoe-store sources only run for running/walking.
+    isRunning
+      ? withTimeout(fetchOsmShoeStores(lat, lng, radiusMi), [], "osmShoeStores")
+      : Promise.resolve([]),
+    isRunning
+      ? withTimeout(fetchMapboxShoeStores(lat, lng, radiusMi), [], "mapboxShoeStores")
+      : Promise.resolve([]),
     withTimeout(fetchOsmMedical(lat, lng, radiusMi), [], "osmMedical"),
     withTimeout(fetchOsmRestaurants(lat, lng, radiusMi), [], "osmRestaurants"),
     withTimeout(fetchOsmBathrooms(lat, lng, radiusMi), [], "osmBathrooms"),
@@ -131,13 +166,21 @@ export async function GET(req: NextRequest) {
   const fsqPartners = take(fsqC);
   const mapboxPartners = take(mapboxC);
   const osmPartners = take(osmC);
+  const osmShoePartners = take(osmShoeC);
+  const mapboxShoePartners = take(mapboxShoeC);
 
-  const relevant_types =
-    sport === "running"
-      ? ["running_store", "gym", "bike_shop"]
-      : ["bike_shop", "gym", "running_store"];
-  const primaryType = sport === "running" ? "running_store" : "bike_shop";
-  const shopTypes = new Set(["bike_shop", "running_store", "gym"]);
+  // Running/walking pages: only shoe specialty stores. Cycling: bike shops
+  // + adjacent (gym, running_store) for completeness.
+  const relevant_types = isRunning ? ["running_store"] : ["bike_shop", "gym", "running_store"];
+  const primaryType = isRunning ? "running_store" : "bike_shop";
+  const shopTypes = isRunning
+    ? new Set(["running_store"])
+    : new Set(["bike_shop", "running_store", "gym"]);
+
+  // For running/walking, drop chains and big-box outlets that are technically
+  // tagged shoe_store but aren't running specialty (formal/dress shoes, kids
+  // character chains, etc). Best-effort by name keyword.
+  const NON_ATHLETIC_RE = /\b(payless|dsw|famous footwear|crocs|aldo|stride rite|journeys|naturalizer|skechers|clarks|red wing|cole haan|allen edmonds|johnston|stuart weitzman|jimmy choo|footaction|kids? foot locker|baby gap)\b/i;
 
   // Reject anything whose name looks medical, no matter which source returned it.
   // Belt-and-suspenders against bad category tagging in Foursquare/Yelp/OSM.
@@ -149,7 +192,9 @@ export async function GET(req: NextRequest) {
     | (typeof yelpPartners)[number]
     | (typeof fsqPartners)[number]
     | (typeof mapboxPartners)[number]
-    | (typeof osmPartners)[number];
+    | (typeof osmPartners)[number]
+    | (typeof osmShoePartners)[number]
+    | (typeof mapboxShoePartners)[number];
 
   const results = [
     ...dbPartners,
@@ -157,8 +202,16 @@ export async function GET(req: NextRequest) {
     ...fsqPartners,
     ...mapboxPartners,
     ...osmPartners,
+    ...osmShoePartners,
+    ...mapboxShoePartners,
   ]
-    .filter((p) => p.distanceMi <= radiusMi && shopTypes.has(p.type) && !looksMedical(p.name))
+    .filter(
+      (p) =>
+        p.distanceMi <= radiusMi &&
+        shopTypes.has(p.type) &&
+        !looksMedical(p.name) &&
+        (!isRunning || !NON_ATHLETIC_RE.test(p.name))
+    )
     .sort((a: Result, b: Result) => {
       const isPrimary = (p: Result) => (p.type === primaryType ? 1 : 0);
       if (isPrimary(a) !== isPrimary(b)) return isPrimary(b) - isPrimary(a);
@@ -231,5 +284,22 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => a.distanceMi - b.distanceMi)
     .slice(0, BATHROOM_LIMIT);
 
-  return NextResponse.json({ partners: results, medical, restaurants, bathrooms });
+  // Raw per-source counts (pre-filter). Surfaced so the UI can show a one-line
+  // diagnostic when the shop list comes back empty — makes it obvious whether
+  // a key is missing on Vercel vs the area genuinely having no shops.
+  const sources = isRunning
+    ? {
+        db: dbCandidates.length,
+        mapboxShoe: mapboxShoeC.length,
+        osmShoe: osmShoeC.length,
+      }
+    : {
+        db: dbCandidates.length,
+        yelp: yelpC.length,
+        fsq: fsqC.length,
+        mapbox: mapboxC.length,
+        osm: osmC.length,
+      };
+
+  return NextResponse.json({ partners: results, medical, restaurants, bathrooms, sources });
 }
