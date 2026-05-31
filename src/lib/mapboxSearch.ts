@@ -1,4 +1,6 @@
-const MAPBOX_URL = "https://api.mapbox.com/search/searchbox/v1/category/bicycle_store";
+// Mapbox category is bicycle_shop (singular "shop"). bicycle_store silently
+// returns zero results — verified against /v1/list/category.
+const MAPBOX_URL = "https://api.mapbox.com/search/searchbox/v1/category/bicycle_shop";
 const MAPBOX_CATEGORY_URL = "https://api.mapbox.com/search/searchbox/v1/category";
 
 export interface MapboxPartner {
