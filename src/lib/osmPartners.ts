@@ -39,13 +39,21 @@ export async function fetchOsmBikeShops(
   const gridLat = Math.round(lat * 20) / 20;
   const gridLng = Math.round(lng * 20) / 20;
   const around = `around:${radiusM},${gridLat},${gridLng}`;
+  // Tell Overpass to give up at 8s (server-side) so it doesn't sit holding the
+  // connection open for the full default 180s when its mirror is overloaded.
   const query =
-    `[out:json][timeout:30];` +
+    `[out:json][timeout:8];` +
     `(` +
       `node["shop"="bicycle"](${around});` +
       `way["shop"="bicycle"](${around});` +
     `);` +
     `out center tags;`;
+
+  // Hard client-side cap independent of the server timeout. If the kumi.systems
+  // mirror itself is slow to respond (TCP-accept-then-hang is a known failure
+  // mode), bail at 6s so the rest of the partners call doesn't wait on us.
+  const ctrl = new AbortController();
+  const abortTimer = setTimeout(() => ctrl.abort(), 6_000);
 
   try {
     const res = await fetch(OVERPASS_URL, {
@@ -55,6 +63,7 @@ export async function fetchOsmBikeShops(
         "User-Agent": "RideByWeather/1.0 (https://ridebyweather.com)",
       },
       body: "data=" + encodeURIComponent(query),
+      signal: ctrl.signal,
       next: { revalidate: 86400 },
     });
     if (!res.ok) return [];
@@ -94,5 +103,7 @@ export async function fetchOsmBikeShops(
     return partners;
   } catch {
     return [];
+  } finally {
+    clearTimeout(abortTimer);
   }
 }
