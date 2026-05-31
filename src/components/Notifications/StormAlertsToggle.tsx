@@ -15,6 +15,10 @@ export default function StormAlertsToggle() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [vapidKey, setVapidKey] = useState<string | null>(null);
+  // Window alerts are a separate per-subscription toggle. We load the current
+  // value from the server when we discover an existing subscription.
+  const [windowAlerts, setWindowAlerts] = useState<boolean | null>(null);
+  const [endpoint, setEndpoint] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +55,23 @@ export default function StormAlertsToggle() {
       const reg = await navigator.serviceWorker.getRegistration("/sw.js").catch(() => null);
       const sub = await reg?.pushManager.getSubscription().catch(() => null);
       if (!cancelled) setStatus({ kind: sub ? "on" : "off" });
+
+      // Hydrate the window-alerts toggle from the server so it reflects the
+      // user's saved preference rather than always defaulting to false.
+      if (sub && !cancelled) {
+        setEndpoint(sub.endpoint);
+        try {
+          const prefRes = await fetch(
+            `/api/push/preferences?endpoint=${encodeURIComponent(sub.endpoint)}`
+          );
+          if (prefRes.ok) {
+            const p = await prefRes.json();
+            if (!cancelled) setWindowAlerts(!!p.windowAlerts);
+          }
+        } catch {
+          // ignore — UI just won't show a hydrated value
+        }
+      }
     }
 
     init();
@@ -97,12 +118,18 @@ export default function StormAlertsToggle() {
           lng: location.lng,
           locationName: location.name,
           userAgent: navigator.userAgent,
+          windowAlerts: true,
         }),
       });
       if (!res.ok) throw new Error(`Subscribe failed: ${res.status}`);
 
       setStatus({ kind: "on" });
-      setMsg({ kind: "ok", text: "Storm alerts on. You'll get a push if lightning is in the area." });
+      setEndpoint(subJson.endpoint ?? null);
+      setWindowAlerts(true);
+      setMsg({
+        kind: "ok",
+        text: "Alerts on. You'll get storm warnings and a daily best-ride-window briefing.",
+      });
     } catch (err) {
       setMsg({ kind: "err", text: err instanceof Error ? err.message : "Could not enable alerts." });
     } finally {
@@ -128,6 +155,36 @@ export default function StormAlertsToggle() {
       setMsg({ kind: "ok", text: "Storm alerts off." });
     } catch (err) {
       setMsg({ kind: "err", text: err instanceof Error ? err.message : "Could not disable alerts." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleWindowAlerts(next: boolean) {
+    if (!endpoint) return;
+    setBusy(true);
+    setMsg(null);
+    // Optimistic update — flip back if the server says no.
+    setWindowAlerts(next);
+    try {
+      const res = await fetch("/api/push/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint, windowAlerts: next }),
+      });
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+      setMsg({
+        kind: "ok",
+        text: next
+          ? "Daily best-window briefing on. Expect a push each evening."
+          : "Daily best-window briefing off.",
+      });
+    } catch (err) {
+      setWindowAlerts(!next);
+      setMsg({
+        kind: "err",
+        text: err instanceof Error ? err.message : "Could not update preference.",
+      });
     } finally {
       setBusy(false);
     }
@@ -168,16 +225,40 @@ export default function StormAlertsToggle() {
       </div>
 
       {status.kind === "on" && (
-        <div className="mt-3">
-          <button
-            type="button"
-            onClick={sendTest}
-            disabled={busy}
-            className="text-xs px-3 py-1.5 rounded-md border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 disabled:opacity-50 transition-colors"
-          >
-            Send test alert
-          </button>
-        </div>
+        <>
+          <div className="mt-4 flex items-start justify-between gap-4 border-t border-gray-800 pt-4">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-gray-200 flex items-center gap-1.5">
+                <span>Daily ride-window briefing</span>
+                <span aria-hidden>🚴</span>
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Each evening, get the best 2-hour riding window for tomorrow with the predicted Ride Score.
+              </p>
+            </div>
+            <label className="flex-shrink-0 inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={!!windowAlerts}
+                onChange={(e) => toggleWindowAlerts(e.target.checked)}
+                disabled={busy || windowAlerts === null}
+              />
+              <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-500/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500 peer-disabled:opacity-50" />
+            </label>
+          </div>
+
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={sendTest}
+              disabled={busy}
+              className="text-xs px-3 py-1.5 rounded-md border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 disabled:opacity-50 transition-colors"
+            >
+              Send test alert
+            </button>
+          </div>
+        </>
       )}
 
       {msg && (

@@ -1,0 +1,41 @@
+name: Ride window push alert
+
+# Sends each opted-in subscriber a "best ride window for tomorrow" push
+# notification once per evening. Companion to storm-check.yml.
+#
+# Reuses the same CRON_SECRET and RIDEBYWEATHER_URL repo secrets that the
+# storm check uses — no new setup required if storm alerts are already
+# working.
+
+on:
+  schedule:
+    # 01:00 UTC = 8 PM US Eastern (winter) / 9 PM EDT (summer),
+    # 5 PM US Pacific (winter) / 6 PM PDT (summer). Good "tonight you'll
+    # look at your phone before bed" timing for most US users.
+    # GitHub Actions schedule may slip 5-15 min under load — that's fine,
+    # this is a once-per-day briefing, not time-critical.
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Hit /api/push/check-windows
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          RIDEBYWEATHER_URL: ${{ secrets.RIDEBYWEATHER_URL }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET secret is not set in this repo"
+            exit 1
+          fi
+          if [ -z "$RIDEBYWEATHER_URL" ]; then
+            echo "::error::RIDEBYWEATHER_URL secret is not set in this repo"
+            exit 1
+          fi
+          curl -fsS \
+            -X GET \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${RIDEBYWEATHER_URL%/}/api/push/check-windows"

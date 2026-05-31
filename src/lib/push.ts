@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { getWeatherProvider, type WeatherLocation } from "./weather";
-import type { WeatherInput } from "./ride-score";
+import { getWeatherProvider, type WeatherLocation, type HourlyForecast } from "./weather";
+import { computeCyclingScore, type WeatherInput } from "./ride-score";
 
 // web-push is loaded lazily so the app still boots if the dependency hasn't
 // been installed yet (e.g. fresh checkout before `npm install`). Routes will
@@ -114,6 +114,195 @@ export interface CheckResult {
   notified: number;
   removed: number;
   errors: number;
+}
+
+// ---------- Ride Window Alerts ----------
+// Daily evening push: "Tomorrow's best ride window is 6-9 AM, score 8.2."
+// Uses the same VAPID + subscription infra as storm alerts, but only fires
+// for subscribers who opted in via the windowAlerts flag.
+
+export interface BestWindow {
+  startHourLocal: number; // 0-23, local to the subscriber's location
+  endHourLocal: number;   // exclusive
+  avgScore: number;       // 0-10
+  scoreLabel: string;
+  weather: WeatherInput;  // representative weather (the middle hour)
+  startsTomorrow: boolean;
+}
+
+// Pull the local hour-of-day out of an Open-Meteo timestamp. Because we ask
+// for timezone=auto, the timestamps come back as local strings without an
+// offset; Node parses them as UTC. So getUTCHours() actually reads back the
+// LOCAL hour at the queried location. Same trick for the day-of-month.
+function localHour(ts: Date): number {
+  return ts.getUTCHours();
+}
+function localDay(ts: Date): number {
+  return ts.getUTCDate();
+}
+
+const DAYLIGHT_START_HOUR = 6;
+const DAYLIGHT_END_HOUR = 20; // 8 PM
+const WINDOW_LENGTH_HOURS = 2;
+const MIN_NOTIFY_SCORE = 6.0; // 6.0 = "GOOD" on the 0-10 scale
+const WINDOW_DEDUP_MS = 22 * 3600 * 1000; // once per day
+
+// Find the best contiguous WINDOW_LENGTH_HOURS daylight window in the
+// hourly forecast. Prefers tomorrow's daylight if it scores well; falls
+// back to later today if tomorrow has no qualifying window.
+export function findBestRideWindow(forecast: HourlyForecast[]): BestWindow | null {
+  if (forecast.length < WINDOW_LENGTH_HOURS) return null;
+
+  // Day boundary: the first slot we see has some local hour. Tomorrow starts
+  // when the day-of-month changes.
+  const firstDay = forecast[0] ? localDay(forecast[0].timestamp) : null;
+
+  const eligible = forecast.filter((h) => {
+    const hr = localHour(h.timestamp);
+    return hr >= DAYLIGHT_START_HOUR && hr < DAYLIGHT_END_HOUR;
+  });
+
+  if (eligible.length < WINDOW_LENGTH_HOURS) return null;
+
+  let best: { startIdx: number; avg: number } | null = null;
+
+  for (let i = 0; i + WINDOW_LENGTH_HOURS <= eligible.length; i++) {
+    // Skip non-contiguous spans (e.g., the jump from 7pm today to 6am tomorrow).
+    const span = eligible.slice(i, i + WINDOW_LENGTH_HOURS);
+    const contiguous = span.every((h, j) => {
+      if (j === 0) return true;
+      const prev = span[j - 1].timestamp.getTime();
+      const dt = h.timestamp.getTime() - prev;
+      return dt > 3300_000 && dt < 3900_000; // ~1 hour ±10 min
+    });
+    if (!contiguous) continue;
+
+    const scores = span.map((h) => computeCyclingScore(h.weather).score);
+    const avg = scores.reduce((a, b) => a + b, 0) / scores.length;
+    if (!best || avg > best.avg) best = { startIdx: i, avg };
+  }
+
+  if (!best) return null;
+
+  const span = eligible.slice(best.startIdx, best.startIdx + WINDOW_LENGTH_HOURS);
+  const mid = span[Math.floor(span.length / 2)];
+  const scoreLabel =
+    best.avg >= 9.5 ? "PERFECT" :
+    best.avg >= 8.0 ? "GREAT" :
+    best.avg >= 6.0 ? "GOOD" :
+    best.avg >= 5.0 ? "NEUTRAL" : "TOUGH";
+
+  const firstSlot = span[0];
+  const lastSlot = span[span.length - 1];
+
+  return {
+    startHourLocal: localHour(firstSlot.timestamp),
+    endHourLocal: (localHour(lastSlot.timestamp) + 1) % 24,
+    avgScore: Math.round(best.avg * 10) / 10,
+    scoreLabel,
+    weather: mid.weather,
+    startsTomorrow: firstDay !== null && localDay(firstSlot.timestamp) !== firstDay,
+  };
+}
+
+function fmtHour12(h: number): string {
+  if (h === 0) return "12 AM";
+  if (h === 12) return "12 PM";
+  if (h < 12) return `${h} AM`;
+  return `${h - 12} PM`;
+}
+
+function describeConditions(w: WeatherInput): string {
+  const temp = `${Math.round(w.tempF)}°F`;
+  const wind =
+    w.windSpeedMph < 6 ? "calm wind" :
+    w.windSpeedMph < 12 ? "light wind" :
+    w.windSpeedMph < 20 ? `${Math.round(w.windSpeedMph)} mph wind` :
+    `${Math.round(w.windSpeedMph)} mph wind`;
+  const sky =
+    w.condition === "clear" ? "sunny" :
+    w.condition === "clouds" ? "cloudy" :
+    w.condition === "rain" ? "rainy" :
+    w.condition;
+  return `${temp}, ${wind}, ${sky}`;
+}
+
+export async function checkAndNotifyBestWindows(): Promise<CheckResult> {
+  const result: CheckResult = { checked: 0, notified: 0, removed: 0, errors: 0 };
+  if (!configureVapid()) return result;
+
+  const subs = await db.pushSubscription.findMany({
+    where: {
+      windowAlerts: true,
+      lat: { not: null },
+      lng: { not: null },
+    },
+  });
+
+  // Group by rounded lat/lng so we only call the weather API once per region.
+  const byLocation = new Map<string, typeof subs>();
+  for (const s of subs) {
+    const key = `${s.lat!.toFixed(2)}|${s.lng!.toFixed(2)}`;
+    const arr = byLocation.get(key) ?? [];
+    arr.push(s);
+    byLocation.set(key, arr);
+  }
+
+  const provider = getWeatherProvider();
+  const cutoff = Date.now() - WINDOW_DEDUP_MS;
+
+  for (const [, group] of byLocation) {
+    const first = group[0];
+    const loc: WeatherLocation = { lat: first.lat!, lng: first.lng! };
+
+    let window: BestWindow | null = null;
+    try {
+      // 36 hours covers tonight + all of tomorrow's daylight even if the cron
+      // runs around midnight local time.
+      const forecast = await provider.getHourlyForecast(loc, 36);
+      window = findBestRideWindow(forecast);
+    } catch {
+      result.errors += group.length;
+      continue;
+    }
+
+    result.checked += group.length;
+    if (!window || window.avgScore < MIN_NOTIFY_SCORE) continue;
+
+    const day = window.startsTomorrow ? "Tomorrow" : "Today";
+    const timeRange = `${fmtHour12(window.startHourLocal)}–${fmtHour12(window.endHourLocal)}`;
+    const place = first.locationName ?? "your area";
+
+    const payload: StormPayload = {
+      title: `🚴 ${window.scoreLabel} window: ${day} ${timeRange}`,
+      body: `${place}: Ride Score ${window.avgScore.toFixed(1)} — ${describeConditions(window.weather)}.`,
+      tag: `window-${first.lat!.toFixed(2)}-${first.lng!.toFixed(2)}`,
+      url: "/cycling",
+      locationName: first.locationName,
+    };
+
+    for (const s of group) {
+      if (s.lastWindowNotifiedAt && s.lastWindowNotifiedAt.getTime() > cutoff) continue;
+      const res = await sendPushToSubscription(s, payload);
+      if (res.ok) {
+        result.notified += 1;
+        await db.pushSubscription.update({
+          where: { id: s.id },
+          data: { lastWindowNotifiedAt: new Date(), failureCount: 0 },
+        });
+      } else if (res.gone) {
+        result.removed += 1;
+        await db.pushSubscription.delete({ where: { id: s.id } });
+      } else {
+        result.errors += 1;
+        await db.pushSubscription.update({
+          where: { id: s.id },
+          data: { failureCount: { increment: 1 } },
+        });
+      }
+    }
+  }
+  return result;
 }
 
 export async function checkAndNotifyAllSubscribers(): Promise<CheckResult> {

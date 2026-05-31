@@ -13,6 +13,10 @@ const SubscribeSchema = z.object({
   lng: z.number().min(-180).max(180),
   locationName: z.string().max(200).optional().nullable(),
   userAgent: z.string().max(500).optional().nullable(),
+  // Optional opt-in for the daily "best ride window" push. Defaults to true
+  // so brand-new subscribers get the killer feature automatically; they can
+  // turn it off from the settings toggle.
+  windowAlerts: z.boolean().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -26,7 +30,8 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid subscription" }, { status: 400 });
   }
-  const { endpoint, keys, lat, lng, locationName, userAgent } = parsed.data;
+  const { endpoint, keys, lat, lng, locationName, userAgent, windowAlerts } = parsed.data;
+  const wantsWindow = windowAlerts ?? true;
 
   const sub = await db.pushSubscription.upsert({
     where: { endpoint },
@@ -40,6 +45,7 @@ export async function POST(req: NextRequest) {
       locationName: locationName ?? null,
       userAgent: userAgent ?? null,
       stormAlerts: true,
+      windowAlerts: wantsWindow,
     },
     update: {
       userId: payload.userId,
@@ -50,6 +56,9 @@ export async function POST(req: NextRequest) {
       locationName: locationName ?? null,
       userAgent: userAgent ?? null,
       stormAlerts: true,
+      // On re-subscribe, only flip windowAlerts on if the caller asked for it;
+      // don't trample an explicit opt-out the user made earlier.
+      ...(windowAlerts === true ? { windowAlerts: true } : {}),
       failureCount: 0,
     },
   });

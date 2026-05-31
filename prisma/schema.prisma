@@ -92,7 +92,14 @@ model PushSubscription {
   locationName String?
 
   stormAlerts  Boolean   @default(true)
+  // Daily "best ride window for tomorrow" alert. Off by default so existing
+  // users don't suddenly start getting an extra notification each evening
+  // without opting in.
+  windowAlerts Boolean   @default(false)
   lastNotifiedAt DateTime?
+  // Tracked separately from storm notifications so a storm alert today
+  // doesn't accidentally suppress tomorrow's window alert.
+  lastWindowNotifiedAt DateTime?
   failureCount Int       @default(0)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -128,6 +135,9 @@ model UserPreferences {
   dislikeWind     Boolean @default(false)
   temperatureMin  Float?
   temperatureMax  Float?
+  // Rider weight in pounds — used to estimate calories burned per ride.
+  // Nullable so users who don't enter it just don't see calorie totals.
+  weightLb        Float?
 
   @@map("user_preferences")
 }
