@@ -114,6 +114,32 @@ export default function LocationSearch({ onSelect, autoDetect = true, placeholde
     onSelect({ lat: r.lat, lng: r.lng, name: r.display });
   };
 
+  // Resolve "Enter" / "Go" on the mobile keyboard: pick the top suggestion,
+  // or if the debounce hasn't fired yet, force the geocode call now and pick
+  // its first result. Without this, addresses with no tapped dropdown went
+  // nowhere on mobile.
+  const submitTopSuggestion = async () => {
+    if (suggestions.length > 0) {
+      select(suggestions[0]);
+      return;
+    }
+    if (query.length < 2) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setSearchLoading(true);
+    try {
+      const near = nearRef.current;
+      const url = near
+        ? `/api/geocode?q=${encodeURIComponent(query)}&lat=${near.lat}&lng=${near.lng}`
+        : `/api/geocode?q=${encodeURIComponent(query)}`;
+      const res = await fetch(url);
+      const json = await res.json();
+      const results = (json.results ?? []) as GeoResult[];
+      if (results.length > 0) select(results[0]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full">
       <div ref={searchRef} className="relative w-full sm:w-72">
@@ -122,6 +148,16 @@ export default function LocationSearch({ onSelect, autoDetect = true, placeholde
           value={query}
           onChange={(e) => handleQueryChange(e.target.value)}
           onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              submitTopSuggestion();
+            }
+          }}
+          enterKeyHint="go"
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
           placeholder={placeholder}
           className="w-full rounded-lg bg-gray-800 border border-gray-700 pl-4 pr-8 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-sky-500"
         />
@@ -133,7 +169,16 @@ export default function LocationSearch({ onSelect, autoDetect = true, placeholde
             {suggestions.map((r, i) => (
               <li key={i}>
                 <button
-                  onMouseDown={() => select(r)}
+                  type="button"
+                  // onMouseDown fires before the input's blur so the suggestion
+                  // doesn't disappear before the tap registers. preventDefault
+                  // keeps focus on the input. onClick is a belt-and-suspenders
+                  // fallback for mobile browsers that synthesize taps oddly.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    select(r);
+                  }}
+                  onClick={() => select(r)}
                   className="w-full px-4 py-2.5 text-left text-sm text-gray-200 hover:bg-gray-800 transition-colors"
                 >
                   <span className="font-medium">{r.name}</span>
