@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { z } from "zod";
+import { getUserTier, limitsFor } from "@/lib/tier";
 
 const SaveRouteSchema = z.object({
   name: z.string().min(1).max(80),
@@ -49,6 +50,27 @@ export async function POST(req: NextRequest) {
   const parsed = SaveRouteSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid input", details: parsed.error.flatten() }, { status: 400 });
+  }
+
+  // Free tier: capped at FREE_LIMITS.routes saved routes. Pro is unlimited.
+  // Returning 402 lets the client open the paywall instead of a generic
+  // error toast.
+  const tier = await getUserTier(payload.userId);
+  const limit = limitsFor(tier).routes;
+  if (Number.isFinite(limit)) {
+    const count = await db.route.count({ where: { userId: payload.userId } });
+    if (count >= limit) {
+      return NextResponse.json(
+        {
+          error: "Saved route limit reached",
+          feature: "Unlimited saved routes",
+          limit,
+          tier,
+          upgradeUrl: "/pricing",
+        },
+        { status: 402 }
+      );
+    }
   }
 
   const { name, sport, waypoints, segments, distanceMi } = parsed.data;

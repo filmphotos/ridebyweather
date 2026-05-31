@@ -30,6 +30,7 @@ model User {
   emergencyContacts EmergencyContact[]
   roadClosures      RoadClosure[]
   rides             Ride[]
+  rideSpots         RideSpot[]
 
   @@map("users")
 }
@@ -371,6 +372,32 @@ model Ride {
 
   @@index([userId, startedAt])
   @@map("rides")
+}
+
+// Saved ride locations powering the Pro "Where should I ride?" scanner.
+// Each spot is one place the user might roll out from — home, the
+// trailhead, a weekend cabin. We rank them by best-window Ride Score
+// so the user can pick today's best option at a glance.
+model RideSpot {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Short user-chosen label ("Home", "Lake Loop") shown in the ranked list.
+  name         String
+  // Reverse-geocoded full name from when the spot was saved, for context.
+  locationName String?
+
+  lat          Float
+  lng          Float
+  // Each sport scores conditions differently — we cache the sport so the
+  // scanner can score this spot under the right rules without an extra
+  // lookup. Defaults to cycling.
+  sport        String   @default("cycling")
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@map("ride_spots")
 }
 
 model PartnerListing {

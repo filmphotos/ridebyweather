@@ -3,12 +3,17 @@ import { z } from "zod";
 import { getWeatherProvider } from "@/lib/weather";
 import { computeCyclingScore, type WeatherInput } from "@/lib/ride-score";
 import { getAuthPayload } from "@/lib/auth";
+import { getUserTier, limitsFor } from "@/lib/tier";
 
 const QuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
   days: z.coerce.number().min(1).max(14).default(7),
 });
+
+// Internal: cap requested days to the user's tier. Free maxes out at 7,
+// Pro at 14. We silently clamp rather than 402 so existing clients
+// requesting 7 days don't break.
 
 export async function GET(req: NextRequest) {
   const payload = await getAuthPayload(req);
@@ -20,7 +25,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { lat, lng, days } = parsed.data;
+  const { lat, lng, days: requested } = parsed.data;
+  const tier = await getUserTier(payload.userId);
+  const maxForTier = limitsFor(tier).forecastDays;
+  const days = Math.min(requested, maxForTier);
+  const wasClamped = requested > maxForTier;
 
   try {
     const provider = getWeatherProvider();
@@ -62,7 +71,12 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ daily: enriched });
+    return NextResponse.json({
+      daily: enriched,
+      tier,
+      maxDays: maxForTier,
+      clamped: wasClamped,
+    });
   } catch (err) {
     console.error("Daily forecast error:", err);
     return NextResponse.json({ error: "Failed to fetch daily forecast" }, { status: 500 });

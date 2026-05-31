@@ -29,6 +29,7 @@ const toolItems = [
   { label: "Bike Shops & Partners", href: "/bike-shops" },
   { label: "Running Stores", href: "/run-stores" },
   { label: "Walking Stores", href: "/walk-stores" },
+  { label: "Where Should I Ride?", href: "/spots" },
   { label: "Compare Locations", href: "/compare" },
   { label: "Tour Planner", href: "/tour" },
   { label: "Air Quality", href: "/air-quality" },
