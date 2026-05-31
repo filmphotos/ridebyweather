@@ -18,20 +18,6 @@ const rideScoreFactors = [
 
 const detailedFeatures = [
   {
-    icon: "🤖",
-    title: "AI Ride Assistant",
-    tagline: "Ask anything. Get answers from your real forecast.",
-    description:
-      "A chat assistant powered by Claude that knows your saved spots, your current conditions, and the next 36 hours of weather. Ask what to wear, when to leave, or which spot has the best window — no generic AI weather hallucinations.",
-    bullets: [
-      "Grounded in your actual forecast and Ride Scores",
-      "Knows your saved ride spots and recommends across them",
-      "Specific clothing suggestions, not vague \"warm layers\"",
-      "Streams answers token-by-token",
-    ],
-    proBadge: true,
-  },
-  {
     icon: "📍",
     title: "Where Should I Ride?",
     tagline: "Rank your favorite spots by today's best window.",
@@ -684,7 +670,6 @@ const detailedFeatures = [
 // Each advertised feature maps to the page that actually delivers it. Features
 // without an entry (e.g. Device Integrations) are genuinely not live yet.
 const featureLinks: Record<string, string> = {
-  "AI Ride Assistant": "/ask",
   "Where Should I Ride?": "/spots",
   "24-Hour Route Forecast": "/routes",
   "Daily Best-Window Push": "/settings",
@@ -742,7 +727,7 @@ const featureLinks: Record<string, string> = {
 const faqs = [
   {
     q: "Do I need to pay to use RideByWeather?",
-    a: "No. The Free tier is forever-free and covers the basic Ride Score, 7-day forecast, gear avatar, group rides, e-bike law lookups, 1 saved ride spot, and 3 saved routes. Pro ($9/mo) unlocks the AI Ride Assistant, the multi-location \"Where should I ride?\" scanner, the 24-hour route forecast, daily best-window push alerts, and the 14-day outlook.",
+    a: "No. The Free tier is forever-free and covers the basic Ride Score, 7-day forecast, gear avatar, group rides, e-bike law lookups, 1 saved ride spot, and 3 saved routes. Pro ($9/mo) unlocks the multi-location \"Where should I ride?\" scanner, the 24-hour route forecast, daily best-window push alerts, and the 14-day outlook.",
   },
   {
     q: "How accurate is the Ride Score?",
@@ -767,7 +752,6 @@ const faqs = [
 ];
 
 const proFeatures = [
-  "AI Ride Assistant — chat grounded in your real forecast",
   "“Where should I ride?” scanner — rank 10 saved spots",
   "24-hour route forecast (pick the best departure window)",
   "Daily best-window push alerts",

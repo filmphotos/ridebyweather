@@ -35,7 +35,6 @@ const toolGroups: ToolGroup[] = [
     heading: "Planning",
     items: [
       { label: "Route & Wind Planner", href: "/routes" },
-      { label: "AI Ride Assistant", href: "/ask" },
       { label: "Where Should I Ride?", href: "/spots" },
       { label: "Commute Mode", href: "/commute" },
       { label: "Event Countdown", href: "/event" },
@@ -81,6 +80,7 @@ const toolGroups: ToolGroup[] = [
     heading: "Local & community",
     items: [
       { label: "City Ride Guides", href: "/guides" },
+      { label: "Bike Trails", href: "/trails" },
       { label: "Bike Shops & Partners", href: "/bike-shops" },
       { label: "Running Stores", href: "/run-stores" },
       { label: "Walking Stores", href: "/walk-stores" },

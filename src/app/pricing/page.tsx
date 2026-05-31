@@ -38,7 +38,6 @@ const plans = [
     description: "Where, when, and what to ride — answered.",
     features: [
       "Everything in Free",
-      "AI Ride Assistant — ask anything, get answers from your real forecast",
       "“Where should I ride?” — rank 10 saved spots",
       "Daily best-ride-window push alerts",
       "24-hour route forecast (best time to leave THIS route)",
