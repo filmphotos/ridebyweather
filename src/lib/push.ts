@@ -305,6 +305,115 @@ export async function checkAndNotifyBestWindows(): Promise<CheckResult> {
   return result;
 }
 
+// Pre-sunset light-battery reminder.
+//
+// Fires once per location-group at (local sunset − duskOffsetMin).
+// Local time is derived from the location's UTC offset, which Open-Meteo
+// supplies via timezone=auto in the daily forecast.
+export async function checkAndNotifyDusk(now: Date = new Date()): Promise<CheckResult> {
+  const result: CheckResult = { checked: 0, notified: 0, removed: 0, errors: 0 };
+  if (!configureVapid()) return result;
+
+  // Cast until prisma generate picks up the new duskAlerts column — Vercel
+  // regens during `prisma db push` on deploy.
+  const subs = (await db.pushSubscription.findMany({
+    where: {
+      duskAlerts: true,
+      lat: { not: null },
+      lng: { not: null },
+    } as never,
+  })) as Array<Awaited<ReturnType<typeof db.pushSubscription.findFirst>> & {
+    duskOffsetMin?: number | null;
+    lastDuskNotifiedAt?: Date | null;
+  }>;
+
+  // Group by rounded location so we only fetch daily forecast once per area.
+  const byLocation = new Map<string, typeof subs>();
+  for (const s of subs) {
+    const key = `${s.lat!.toFixed(2)}|${s.lng!.toFixed(2)}`;
+    const arr = byLocation.get(key) ?? [];
+    arr.push(s);
+    byLocation.set(key, arr);
+  }
+
+  const provider = getWeatherProvider();
+  // Don't refire within 18h so a cron that runs every hour can't double up.
+  const dedupCutoff = now.getTime() - 18 * 3600 * 1000;
+
+  for (const [, group] of byLocation) {
+    const first = group[0];
+    const loc: WeatherLocation = { lat: first.lat!, lng: first.lng! };
+
+    let sunsetIso: string | null = null;
+    try {
+      const daily = await provider.getDailyForecast(loc, 1);
+      sunsetIso = daily[0]?.sunset ?? null;
+    } catch {
+      result.errors += group.length;
+      continue;
+    }
+    if (!sunsetIso) {
+      result.checked += group.length;
+      continue;
+    }
+
+    // Open-Meteo returns local-time ISO without tz suffix (e.g. "2026-05-28T20:14").
+    // We parse the clock portion as local time at the location.
+    const t = sunsetIso.split("T")[1];
+    if (!t) continue;
+    const [hh, mm] = t.split(":").map(Number);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) continue;
+    const sunsetMinOfDay = hh * 60 + mm;
+
+    // Convert "now" to the location's local time by subtracting its longitude
+    // offset. Using longitude / 15 = hours is rough but good enough for a
+    // ±30-min cron window. Cron runs hourly, so we only need to match the hour.
+    const nowUtcMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const offsetHours = Math.round(first.lng! / 15);
+    const nowLocalMin = ((nowUtcMin + offsetHours * 60) % 1440 + 1440) % 1440;
+
+    result.checked += group.length;
+
+    for (const s of group) {
+      const offsetMin = s.duskOffsetMin ?? 30;
+      const targetMin = (sunsetMinOfDay - offsetMin + 1440) % 1440;
+      // Fire if within ±30 min of target so an hourly cron catches it.
+      let diff = Math.abs(nowLocalMin - targetMin);
+      if (diff > 720) diff = 1440 - diff;
+      if (diff > 30) continue;
+      if (s.lastDuskNotifiedAt && s.lastDuskNotifiedAt.getTime() > dedupCutoff) continue;
+
+      const payload: StormPayload = {
+        title: "🔦 Lights & layers check",
+        body: `Sunset in ${offsetMin} min near ${first.locationName ?? "you"}. Charge the lights and pack a reflective layer.`,
+        tag: `dusk-${first.lat!.toFixed(2)}-${first.lng!.toFixed(2)}`,
+        url: "/sun",
+        locationName: first.locationName,
+      };
+
+      const res = await sendPushToSubscription(s, payload);
+      if (res.ok) {
+        result.notified += 1;
+        await db.pushSubscription.update({
+          where: { id: s.id! },
+          data: { lastDuskNotifiedAt: new Date(), failureCount: 0 } as never,
+        });
+      } else if (res.gone) {
+        result.removed += 1;
+        await db.pushSubscription.delete({ where: { id: s.id! } });
+      } else {
+        result.errors += 1;
+        await db.pushSubscription.update({
+          where: { id: s.id! },
+          data: { failureCount: { increment: 1 } },
+        });
+      }
+    }
+  }
+
+  return result;
+}
+
 export async function checkAndNotifyAllSubscribers(): Promise<CheckResult> {
   const result: CheckResult = { checked: 0, notified: 0, removed: 0, errors: 0 };
   if (!configureVapid()) return result;

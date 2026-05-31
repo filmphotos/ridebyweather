@@ -11,6 +11,8 @@ const PrefsSchema = z.object({
   endpoint: z.string().url(),
   stormAlerts: z.boolean().optional(),
   windowAlerts: z.boolean().optional(),
+  duskAlerts: z.boolean().optional(),
+  duskOffsetMin: z.number().int().min(5).max(120).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -23,9 +25,11 @@ export async function POST(req: NextRequest) {
   const parsed = PrefsSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
-  const data: { stormAlerts?: boolean; windowAlerts?: boolean } = {};
+  const data: { stormAlerts?: boolean; windowAlerts?: boolean; duskAlerts?: boolean; duskOffsetMin?: number } = {};
   if (parsed.data.stormAlerts !== undefined) data.stormAlerts = parsed.data.stormAlerts;
   if (parsed.data.windowAlerts !== undefined) data.windowAlerts = parsed.data.windowAlerts;
+  if (parsed.data.duskAlerts !== undefined) data.duskAlerts = parsed.data.duskAlerts;
+  if (parsed.data.duskOffsetMin !== undefined) data.duskOffsetMin = parsed.data.duskOffsetMin;
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
@@ -49,9 +53,10 @@ export async function GET(req: NextRequest) {
   const endpoint = req.nextUrl.searchParams.get("endpoint");
   if (!endpoint) return NextResponse.json({ error: "endpoint required" }, { status: 400 });
 
+  // Cast until prisma generate picks up the new fields — Vercel regens on deploy.
   const sub = await db.pushSubscription.findFirst({
     where: { endpoint, userId: payload.userId },
-    select: { stormAlerts: true, windowAlerts: true },
+    select: { stormAlerts: true, windowAlerts: true, duskAlerts: true, duskOffsetMin: true } as never,
   });
   if (!sub) return NextResponse.json({ found: false }, { status: 404 });
 

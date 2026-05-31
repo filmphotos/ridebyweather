@@ -97,10 +97,16 @@ model PushSubscription {
   // users don't suddenly start getting an extra notification each evening
   // without opting in.
   windowAlerts Boolean   @default(false)
+  // Pre-sunset "do your lights have battery?" push for commuters and dusk
+  // riders. Off by default — opt-in.
+  duskAlerts   Boolean   @default(false)
+  // Minutes before civil sunset to fire the dusk alert (default 30).
+  duskOffsetMin Int      @default(30)
   lastNotifiedAt DateTime?
   // Tracked separately from storm notifications so a storm alert today
   // doesn't accidentally suppress tomorrow's window alert.
   lastWindowNotifiedAt DateTime?
+  lastDuskNotifiedAt DateTime?
   failureCount Int       @default(0)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -139,6 +145,9 @@ model UserPreferences {
   // Rider weight in pounds — used to estimate calories burned per ride.
   // Nullable so users who don't enter it just don't see calorie totals.
   weightLb        Float?
+  // Functional Threshold Power in watts — used to convert indoor-workout
+  // %FTP targets into concrete watt numbers. Null = no targets shown.
+  ftpWatts        Int?
 
   @@map("user_preferences")
 }

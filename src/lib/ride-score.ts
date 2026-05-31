@@ -1,4 +1,4 @@
-import { getBikeProfile, adjustWindScore, adjustTempScore, type BikeType } from "./bikeProfiles";
+import { getBikeProfile, adjustWindScore, adjustTempScore, adjustGustScore, type BikeType } from "./bikeProfiles";
 
 export interface WeatherInput {
   tempF: number;
@@ -222,7 +222,8 @@ export function computeCyclingScore(
   }
 
   const precipS = precipScore(weather.precipProb, weather.precipInch);
-  const gustS = gustScore(weather.windSpeedMph, weather.windGustMph);
+  let gustS = gustScore(weather.windSpeedMph, weather.windGustMph);
+  if (bikeProfile) gustS = adjustGustScore(gustS, bikeProfile);
   const humS = humidityScore(weather.humidity, weather.tempF);
 
   // Weighted composite (weights from spec)

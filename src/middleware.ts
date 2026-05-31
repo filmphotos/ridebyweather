@@ -33,6 +33,8 @@ const PUBLIC_API_PREFIXES = [
   "/api/push/check-storms",
   // Weekly digest cron — handler auths Bearer for cron, cookie for user preview.
   "/api/digest/weekly",
+  // Hourly dusk reminder cron — Bearer auth in the handler.
+  "/api/push/check-dusk",
   // Device pairing: the device has no user cookie. /code issues a code,
   // /poll exchanges the secret for a token, /qr renders the QR image.
   // (/api/device/approve is intentionally NOT public — it needs the logged-in user.)

@@ -8,7 +8,7 @@ const QuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
   lng: z.coerce.number().min(-180).max(180),
   routeBearing: z.coerce.number().optional(),
-  bikeType: z.enum(["road", "gravel", "mtb", "commuter", "ebike"]).optional(),
+  bikeType: z.enum(["road", "gravel", "mtb", "commuter", "ebike", "cargo", "loaded-commuter"]).optional(),
 });
 
 export async function GET(req: NextRequest) {

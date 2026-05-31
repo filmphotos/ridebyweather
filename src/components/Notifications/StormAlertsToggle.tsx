@@ -18,6 +18,9 @@ export default function StormAlertsToggle() {
   // Window alerts are a separate per-subscription toggle. We load the current
   // value from the server when we discover an existing subscription.
   const [windowAlerts, setWindowAlerts] = useState<boolean | null>(null);
+  // Dusk reminder — same hydrate-from-server pattern.
+  const [duskAlerts, setDuskAlerts] = useState<boolean | null>(null);
+  const [duskOffsetMin, setDuskOffsetMin] = useState<number>(30);
   const [endpoint, setEndpoint] = useState<string | null>(null);
 
   useEffect(() => {
@@ -66,7 +69,11 @@ export default function StormAlertsToggle() {
           );
           if (prefRes.ok) {
             const p = await prefRes.json();
-            if (!cancelled) setWindowAlerts(!!p.windowAlerts);
+            if (!cancelled) {
+              setWindowAlerts(!!p.windowAlerts);
+              setDuskAlerts(!!p.duskAlerts);
+              if (typeof p.duskOffsetMin === "number") setDuskOffsetMin(p.duskOffsetMin);
+            }
           }
         } catch {
           // ignore — UI just won't show a hydrated value
@@ -190,6 +197,44 @@ export default function StormAlertsToggle() {
     }
   }
 
+  async function toggleDuskAlerts(next: boolean) {
+    if (!endpoint) return;
+    setBusy(true);
+    setMsg(null);
+    setDuskAlerts(next);
+    try {
+      const res = await fetch("/api/push/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint, duskAlerts: next }),
+      });
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+      setMsg({
+        kind: "ok",
+        text: next ? `Dusk reminder on — ${duskOffsetMin} min before sunset.` : "Dusk reminder off.",
+      });
+    } catch (err) {
+      setDuskAlerts(!next);
+      setMsg({ kind: "err", text: err instanceof Error ? err.message : "Could not update preference." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveDuskOffset(next: number) {
+    if (!endpoint) return;
+    setDuskOffsetMin(next);
+    try {
+      await fetch("/api/push/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint, duskOffsetMin: next }),
+      });
+    } catch {
+      // ignore — UI shows the optimistic value
+    }
+  }
+
   async function sendTest() {
     setBusy(true);
     setMsg(null);
@@ -243,6 +288,46 @@ export default function StormAlertsToggle() {
                 checked={!!windowAlerts}
                 onChange={(e) => toggleWindowAlerts(e.target.checked)}
                 disabled={busy || windowAlerts === null}
+              />
+              <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-500/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500 peer-disabled:opacity-50" />
+            </label>
+          </div>
+
+          <div className="mt-4 flex items-start justify-between gap-4 border-t border-gray-800 pt-4">
+            <div className="flex-1">
+              <p className="text-sm font-medium text-gray-200 flex items-center gap-1.5">
+                <span>Pre-sunset lights reminder</span>
+                <span aria-hidden>🔦</span>
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                A push at <span className="text-gray-400 font-medium">{duskOffsetMin} min</span> before civil sunset — &quot;charge the lights, pack a layer.&quot;
+              </p>
+              {duskAlerts && (
+                <div className="mt-2 inline-flex items-center gap-2 text-xs">
+                  <span className="text-gray-500">Lead time:</span>
+                  {[15, 30, 45, 60].map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => saveDuskOffset(m)}
+                      className={`rounded-md border px-2 py-0.5 transition-colors ${
+                        duskOffsetMin === m
+                          ? "border-sky-500 bg-sky-500/15 text-sky-300"
+                          : "border-gray-800 bg-gray-900 text-gray-400 hover:border-gray-700"
+                      }`}
+                    >
+                      {m}m
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <label className="flex-shrink-0 inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={!!duskAlerts}
+                onChange={(e) => toggleDuskAlerts(e.target.checked)}
+                disabled={busy || duskAlerts === null}
               />
               <div className="relative w-11 h-6 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-sky-500/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500 peer-disabled:opacity-50" />
             </label>

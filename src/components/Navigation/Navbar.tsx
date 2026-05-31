@@ -44,6 +44,9 @@ const toolGroups: ToolGroup[] = [
       { label: "Tour Planner", href: "/tour" },
       { label: "Indoor Fallback", href: "/indoor" },
       { label: "On This Day", href: "/on-this-day" },
+      { label: "E-Bike Range", href: "/ebike-range" },
+      { label: "Caffeine Timing", href: "/caffeine" },
+      { label: "Streaks & Achievements", href: "/streaks" },
     ],
   },
   {
@@ -55,6 +58,7 @@ const toolGroups: ToolGroup[] = [
       { label: "Pollen Index", href: "/pollen" },
       { label: "Sensitive Lungs", href: "/asthma" },
       { label: "Hazard Pins", href: "/hazards" },
+      { label: "Bike Lane Closures", href: "/closures" },
       { label: "Sun & UV", href: "/sun" },
       { label: "Hydration", href: "/hydration" },
       { label: "Acclimation", href: "/acclimation" },

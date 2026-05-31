@@ -595,6 +595,78 @@ const detailedFeatures = [
     ],
   },
   {
+    icon: "🔋",
+    title: "E-Bike Range Calculator",
+    tagline: "Real miles, not the brochure number.",
+    description:
+      "Folds today's wind, temperature, your weight, assist level, and total climbing into a personalized range estimate — with drains and boosts itemized.",
+    bullets: [
+      "Wind, cold, weight, climb factors",
+      "Eco/Tour/Sport/Turbo PAS levels",
+      "Headwind projection from route bearing",
+    ],
+  },
+  {
+    icon: "☕",
+    title: "Caffeine Timing",
+    tagline: "Peak plasma at the start line.",
+    description:
+      "Plan your coffee, espresso, or pre-workout so peak performance hits when you clip in. Dose calibrated to your weight, top-up for long rides included.",
+    bullets: [
+      "45-min pre-ride intake target",
+      "Weight-based 3–6 mg/kg dosing",
+      "Mid-ride top-up for 2h+ efforts",
+    ],
+  },
+  {
+    icon: "🔥",
+    title: "Streaks & Achievements",
+    tagline: "Make every ride count.",
+    description:
+      "Log a ride, build a streak, unlock weather-class badges — cold rides, dawn patrols, gale warriors. Saved locally, social comparison comes next.",
+    bullets: [
+      "Current and longest streak tracking",
+      "16 weather-class achievements",
+      "Quick post-ride log form",
+    ],
+  },
+  {
+    icon: "🔦",
+    title: "Pre-Sunset Lights Reminder",
+    tagline: "Charge before you ride into the dark.",
+    description:
+      "Opt in to a push at 15/30/45/60 min before civil sunset: light battery check, reflective layer reminder. Runs from your saved push location.",
+    bullets: [
+      "Configurable lead time",
+      "Honors local sunset, not server time",
+      "Independent from storm/window alerts",
+    ],
+  },
+  {
+    icon: "📦",
+    title: "Cargo & Loaded Bike Profiles",
+    tagline: "Long-tail, box, panniers — Ride Score retunes.",
+    description:
+      "Cargo bikes and loaded commuters are sail-shaped and gust-sensitive. The Ride Score now applies an extra gust penalty so the verdict matches what it actually feels like.",
+    bullets: [
+      "New cargo and loaded-commuter profiles",
+      "Gust-extra penalty for sail-shaped loads",
+      "Plays directly into your Ride Score",
+    ],
+  },
+  {
+    icon: "🚧",
+    title: "Bike Lane Closures",
+    tagline: "Know the detour before you leave.",
+    description:
+      "Hand-curated bike lane and multi-use trail closures for major US cycling cities — with severity, reason, and end date. City open-data feeds plug in next.",
+    bullets: [
+      "Advisory / Partial / Full classification",
+      "Source links where available",
+      "Crowdsource via email next",
+    ],
+  },
+  {
     icon: "🟠",
     title: "Strava Calibration",
     tagline: "Personal thresholds from your real rides.",
@@ -659,6 +731,12 @@ const featureLinks: Record<string, string> = {
   "City Ride Guides": "/guides",
   "Bike Theft Hotspots": "/theft",
   "Strava Calibration": "/strava",
+  "E-Bike Range Calculator": "/ebike-range",
+  "Caffeine Timing": "/caffeine",
+  "Streaks & Achievements": "/streaks",
+  "Pre-Sunset Lights Reminder": "/settings",
+  "Cargo & Loaded Bike Profiles": "/bike-profiles",
+  "Bike Lane Closures": "/closures",
 };
 
 const faqs = [
