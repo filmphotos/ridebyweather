@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { verifyToken } from "@/lib/auth";
+import { getAuthPayload } from "@/lib/auth";
 
 const BodySchema = z.object({
   waypoints: z
@@ -85,8 +85,8 @@ function densify(waypoints: [number, number][], n: number): { points: [number, n
 }
 
 export async function POST(req: NextRequest) {
-  const token = req.cookies.get("rbw_token")?.value;
-  const payload = token ? await verifyToken(token) : null;
+  // Honor both web cookie and Wear OS Bearer token (see auth memory).
+  const payload = await getAuthPayload(req);
   if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   let body: unknown;

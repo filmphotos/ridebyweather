@@ -4,7 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import type { ElevationResponse, ElevationSample } from "@/app/api/elevation/route";
 
 interface Props {
-  waypoints: [number, number][];
+  /** Waypoints to fetch DEM elevation for. Required unless `data` is passed. */
+  waypoints?: [number, number][];
+  /**
+   * Pre-computed elevation data. When provided, the chart renders directly
+   * without hitting `/api/elevation`. Used by the live-ride view where we
+   * already have GPS altitudes for each point.
+   */
+  data?: ElevationResponse;
 }
 
 // Color by gradient severity, matching the wind-stat palette.
@@ -23,21 +30,26 @@ const PAD_R = 8;
 const PAD_T = 8;
 const PAD_B = 22;
 
-export default function ElevationProfile({ waypoints }: Props) {
-  const [data, setData] = useState<ElevationResponse | null>(null);
+export default function ElevationProfile({ waypoints, data: providedData }: Props) {
+  const [fetchedData, setFetchedData] = useState<ElevationResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   // Stable key so we refetch only when geometry actually changes.
   const wpKey = useMemo(
-    () => waypoints.map(([lng, lat]) => `${lng.toFixed(5)},${lat.toFixed(5)}`).join("|"),
+    () =>
+      waypoints
+        ? waypoints.map(([lng, lat]) => `${lng.toFixed(5)},${lat.toFixed(5)}`).join("|")
+        : "",
     [waypoints]
   );
 
   useEffect(() => {
-    if (waypoints.length < 2) {
-      setData(null);
+    // If the parent supplies data directly, skip the fetch entirely.
+    if (providedData) return;
+    if (!waypoints || waypoints.length < 2) {
+      setFetchedData(null);
       setError(null);
       return;
     }
@@ -57,7 +69,7 @@ export default function ElevationProfile({ waypoints }: Props) {
           if (res.status === 401) throw new Error("Sign in to view elevation");
           throw new Error("Couldn't load elevation");
         }
-        setData((await res.json()) as ElevationResponse);
+        setFetchedData((await res.json()) as ElevationResponse);
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
         setError((err as Error).message);
@@ -71,7 +83,9 @@ export default function ElevationProfile({ waypoints }: Props) {
       clearTimeout(debounce);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wpKey]);
+  }, [wpKey, providedData]);
+
+  const data = providedData ?? fetchedData;
 
   const chart = useMemo(() => {
     if (!data || data.samples.length < 2) return null;
@@ -111,7 +125,9 @@ export default function ElevationProfile({ waypoints }: Props) {
     return { bars, linePath, x, y, minE, maxE, totalD, yTicks };
   }, [data]);
 
-  if (waypoints.length < 2) return null;
+  // Hide the card entirely when there's nothing to render in either mode.
+  if (!providedData && (!waypoints || waypoints.length < 2)) return null;
+  if (providedData && providedData.samples.length < 2) return null;
 
   return (
     <div className="mt-4 rounded-xl border border-gray-800 bg-gray-900/60 p-3">

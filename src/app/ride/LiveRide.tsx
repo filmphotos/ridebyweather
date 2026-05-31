@@ -25,6 +25,7 @@ import { useBleSensors } from "@/lib/ride/useBleSensors";
 import { useActivityReminders, type ReminderMode, type ReminderRule } from "@/lib/ride/useActivityReminders";
 import type { GeoResult } from "@/app/api/geocode/route";
 import WeatherAvatar from "@/components/WeatherAvatar/WeatherAvatar";
+import LiveElevationProfile from "@/components/RouteMap/LiveElevationProfile";
 
 const RideMap = dynamic(() => import("./RideMap"), { ssr: false });
 
@@ -1320,14 +1321,18 @@ export default function LiveRide() {
 
       {/* === MAP === */}
       {tab === "map" && (
-        <div className="card overflow-hidden p-0">
-          <RideMap
-            points={points}
-            heading={heading}
-            windDirDeg={weather?.windDirDeg}
-            windSpeedMph={weather?.windSpeedMph}
-          />
-        </div>
+        <>
+          <div className="card overflow-hidden p-0">
+            <RideMap
+              points={points}
+              heading={heading}
+              windDirDeg={weather?.windDirDeg}
+              windSpeedMph={weather?.windSpeedMph}
+            />
+          </div>
+          {/* Live elevation + gradient — derived from GPS altitudes, no API call */}
+          <LiveElevationProfile points={points} />
+        </>
       )}
 
       {/* === WEATHER === */}
