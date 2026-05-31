@@ -15,31 +15,87 @@ const navItems = [
   { label: "Pricing", href: "/pricing" },
 ];
 
-const toolItems = [
-  { label: "Ride Score", href: "/ride-score" },
-  { label: "Run Score", href: "/run-score" },
-  { label: "Walk Score", href: "/walk-score" },
-  { label: "Ride History", href: "/ride/history" },
-  { label: "Hourly Forecast", href: "/forecast" },
-  { label: "Cycling Gear", href: "/gear" },
-  { label: "Running Gear", href: "/run-gear" },
-  { label: "Walking Gear", href: "/walk-gear" },
-  { label: "Route & Wind Planner", href: "/routes" },
-  { label: "Bike Type Profiles", href: "/bike-profiles" },
-  { label: "Bike Shops & Partners", href: "/bike-shops" },
-  { label: "Running Stores", href: "/run-stores" },
-  { label: "Walking Stores", href: "/walk-stores" },
-  { label: "AI Ride Assistant", href: "/ask" },
-  { label: "Where Should I Ride?", href: "/spots" },
-  { label: "Compare Locations", href: "/compare" },
-  { label: "Tour Planner", href: "/tour" },
-  { label: "Air Quality", href: "/air-quality" },
-  { label: "Sun & UV", href: "/sun" },
-  { label: "Hydration", href: "/hydration" },
-  { label: "Acclimation", href: "/acclimation" },
-  { label: "E-Bike Laws", href: "/ebike-laws" },
-  { label: "Medical Near Me", href: "/hospitals" },
+// Tools dropdown is grouped to keep the now-50-item list scannable. Each
+// section header renders inline; items follow underneath.
+interface ToolItem { label: string; href: string }
+interface ToolGroup { heading: string; items: ToolItem[] }
+
+const toolGroups: ToolGroup[] = [
+  {
+    heading: "Scores & forecast",
+    items: [
+      { label: "Ride Score", href: "/ride-score" },
+      { label: "Run Score", href: "/run-score" },
+      { label: "Walk Score", href: "/walk-score" },
+      { label: "Hourly Forecast", href: "/forecast" },
+      { label: "Ride History", href: "/ride/history" },
+    ],
+  },
+  {
+    heading: "Planning",
+    items: [
+      { label: "Route & Wind Planner", href: "/routes" },
+      { label: "AI Ride Assistant", href: "/ask" },
+      { label: "Where Should I Ride?", href: "/spots" },
+      { label: "Commute Mode", href: "/commute" },
+      { label: "Event Countdown", href: "/event" },
+      { label: "Morning Briefing", href: "/briefing" },
+      { label: "Compare Locations", href: "/compare" },
+      { label: "Tour Planner", href: "/tour" },
+      { label: "Indoor Fallback", href: "/indoor" },
+      { label: "On This Day", href: "/on-this-day" },
+    ],
+  },
+  {
+    heading: "Safety & air",
+    items: [
+      { label: "Road Conditions", href: "/road-conditions" },
+      { label: "Lightning Map", href: "/lightning" },
+      { label: "Air Quality", href: "/air-quality" },
+      { label: "Pollen Index", href: "/pollen" },
+      { label: "Sensitive Lungs", href: "/asthma" },
+      { label: "Hazard Pins", href: "/hazards" },
+      { label: "Sun & UV", href: "/sun" },
+      { label: "Hydration", href: "/hydration" },
+      { label: "Acclimation", href: "/acclimation" },
+      { label: "Medical Near Me", href: "/hospitals" },
+    ],
+  },
+  {
+    heading: "Bike & gear",
+    items: [
+      { label: "Cycling Gear", href: "/gear" },
+      { label: "Running Gear", href: "/run-gear" },
+      { label: "Walking Gear", href: "/walk-gear" },
+      { label: "Tire Pressure", href: "/tire-pressure" },
+      { label: "Chain Lube", href: "/chain-lube" },
+      { label: "Service Intervals", href: "/maintenance" },
+      { label: "Bike Type Profiles", href: "/bike-profiles" },
+    ],
+  },
+  {
+    heading: "Local & community",
+    items: [
+      { label: "City Ride Guides", href: "/guides" },
+      { label: "Bike Shops & Partners", href: "/bike-shops" },
+      { label: "Running Stores", href: "/run-stores" },
+      { label: "Walking Stores", href: "/walk-stores" },
+      { label: "Theft Hotspots", href: "/theft" },
+      { label: "E-Bike Laws", href: "/ebike-laws" },
+    ],
+  },
+  {
+    heading: "Life & money",
+    items: [
+      { label: "Bike vs Drive", href: "/bike-vs-drive" },
+      { label: "Family Mode", href: "/family" },
+      { label: "Refer a Friend", href: "/referrals" },
+      { label: "Connect Strava", href: "/strava" },
+    ],
+  },
 ];
+
+const toolItems: ToolItem[] = toolGroups.flatMap((g) => g.items);
 
 interface AuthUser {
   id: string;
@@ -149,21 +205,28 @@ export default function Navbar() {
                 <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z" clipRule="evenodd" />
               </svg>
             </button>
-            <div className="absolute right-0 top-full hidden w-56 pt-1 group-hover:block">
+            <div className="absolute right-0 top-full hidden w-60 pt-1 group-hover:block">
               <div className="rounded-xl border border-gray-800 bg-gray-900 shadow-xl overflow-y-auto max-h-[75vh] py-1">
-                {toolItems.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "block px-4 py-2 text-sm transition-colors",
-                      pathname?.startsWith(item.href)
-                        ? "bg-sky-500/15 text-sky-400"
-                        : "text-gray-300 hover:bg-gray-800 hover:text-gray-100"
-                    )}
-                  >
-                    {item.label}
-                  </Link>
+                {toolGroups.map((group, idx) => (
+                  <div key={group.heading} className={idx > 0 ? "mt-1 border-t border-gray-800 pt-1" : undefined}>
+                    <div className="px-4 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                      {group.heading}
+                    </div>
+                    {group.items.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "block px-4 py-2 text-sm transition-colors",
+                          pathname?.startsWith(item.href)
+                            ? "bg-sky-500/15 text-sky-400"
+                            : "text-gray-300 hover:bg-gray-800 hover:text-gray-100"
+                        )}
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
                 ))}
               </div>
             </div>
@@ -333,22 +396,26 @@ export default function Navbar() {
               </Link>
             ))}
 
-            <div className="mt-1 px-3 pt-2 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-600 border-t border-gray-800">
-              Tools
-            </div>
-            {toolItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  pathname?.startsWith(item.href)
-                    ? "bg-sky-500/20 text-sky-400"
-                    : "text-gray-300 hover:text-white hover:bg-gray-800"
-                )}
-              >
-                {item.label}
-              </Link>
+            {toolGroups.map((group) => (
+              <div key={group.heading} className="mt-1 border-t border-gray-800">
+                <div className="px-3 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-600">
+                  {group.heading}
+                </div>
+                {group.items.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                      pathname?.startsWith(item.href)
+                        ? "bg-sky-500/20 text-sky-400"
+                        : "text-gray-300 hover:text-white hover:bg-gray-800"
+                    )}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
             ))}
 
             {!user && (

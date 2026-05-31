@@ -9,6 +9,7 @@ import WeatherCard from "@/components/WeatherCard/WeatherCard";
 import WeatherAvatar from "@/components/WeatherAvatar/WeatherAvatar";
 import ForecastTimeline from "@/components/Forecast/ForecastTimeline";
 import NearbyPartners from "@/components/Partners/NearbyPartners";
+import UsefulNow from "@/components/UsefulNow/UsefulNow";
 import { BIKE_PROFILES, type BikeType } from "@/lib/bikeProfiles";
 import type { GeoResult } from "@/app/api/geocode/route";
 
@@ -351,6 +352,11 @@ export default function CyclingDashboard() {
               windSpeedMph={data.weather.windSpeedMph}
               gender={gender}
             />
+          </div>
+
+          {/* Contextual feature suggestions */}
+          <div className="lg:col-span-3">
+            <UsefulNow score={data.score} weather={data.weather} />
           </div>
 
           {/* Forecast */}
