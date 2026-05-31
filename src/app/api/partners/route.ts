@@ -126,11 +126,16 @@ export async function GET(req: NextRequest) {
     isRunning
       ? Promise.resolve([])
       : withTimeout(fetchMapboxBikeShops(lat, lng, radiusMi), [], "mapboxBikeShops"),
-    isRunning
+    // OSM Overpass routinely takes the full 6s client cap (kumi.systems mirror
+    // is throttle-prone), so on the dedicated shopsOnly page where Mapbox
+    // already provides 25+ results we skip it to drop response time from ~6s
+    // to ~1s. Dashboards keep OSM for fuller rural coverage.
+    isRunning || shopsOnly
       ? Promise.resolve([])
       : withTimeout(fetchOsmBikeShops(lat, lng, radiusMi), [], "osmBikeShops"),
-    // Shoe-store sources only run for running/walking.
-    isRunning
+    // Shoe-store sources only run for running/walking. Skip OSM Overpass on
+    // shopsOnly for the same reason as bike shops.
+    isRunning && !shopsOnly
       ? withTimeout(fetchOsmShoeStores(lat, lng, radiusMi), [], "osmShoeStores")
       : Promise.resolve([]),
     isRunning
