@@ -35,21 +35,18 @@ export default function HomePage() {
             </Link>
           </div>
 
-          {/* Hero avatar grid */}
+          {/* Hero photo */}
           <div className="relative mt-14 max-w-5xl mx-auto">
-            <div className="rounded-2xl border border-gray-800 bg-[#f5f0e8] p-3 sm:p-5 shadow-2xl overflow-hidden">
+            <div className="rounded-2xl border border-gray-800 shadow-2xl overflow-hidden">
               <Image
-                src="/hero-avatars-grid.png"
-                alt="Cyclist outfit recommendations for every weather condition — male and female"
-                width={1536}
-                height={1024}
+                src="/hero-coastal.jpg"
+                alt="Cyclist, runner, and walker on a coastal road at sunrise"
+                width={1500}
+                height={1000}
                 priority
-                className="w-full h-auto rounded-lg"
+                className="w-full h-auto"
               />
             </div>
-            <p className="mt-4 text-sm text-gray-500">
-              Gear recommendations for every condition — sun, rain, snow, wind, night.
-            </p>
           </div>
         </div>
       </section>
