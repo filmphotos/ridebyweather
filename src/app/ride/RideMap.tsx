@@ -563,75 +563,80 @@ export default function RideMap({ points, heading, windDirDeg, windSpeedMph }: P
         </div>
       )}
 
-      {/* Report a road problem — bottom-left, above the food toggle */}
-      <div className="absolute bottom-14 left-3">
-        {reportOpen && (
-          <div className="absolute bottom-full left-0 mb-2 rounded-lg border border-gray-700 bg-gray-900 shadow-xl overflow-hidden text-xs min-w-[160px]">
-            {CLOSURE_TYPES.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                disabled={reportBusy}
-                onClick={() => reportClosure(t.id)}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-200 hover:bg-gray-800 disabled:opacity-50 border-b border-gray-800 last:border-0"
-              >
-                <span>{t.emoji}</span> {t.label}
-              </button>
-            ))}
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => setReportOpen((v) => !v)}
-          className="flex items-center gap-1.5 rounded-xl bg-gray-900/85 backdrop-blur-sm px-2.5 py-1.5 border border-amber-500/40 text-amber-400 text-xs"
-          aria-expanded={reportOpen}
-        >
-          <span className="text-sm leading-none">⚠️</span>
-          {reportBusy ? "Reporting…" : "Report"}
-        </button>
-      </div>
+      {/* Bottom-left stack: Report button on top, layer toggles below.
+          One flex-col so the toggles row can wrap on narrow screens without
+          ever colliding with the Report button (the previous absolute layout
+          had toggles at bottom-3 and Report at bottom-14, which overlapped
+          once the toggles wrapped to two lines on mobile). */}
+      <div className="absolute bottom-3 left-3 flex flex-col items-start gap-1.5 max-w-[calc(100%-1.5rem)]">
+        <div className="relative">
+          {reportOpen && (
+            <div className="absolute bottom-full left-0 mb-2 rounded-lg border border-gray-700 bg-gray-900 shadow-xl overflow-hidden text-xs min-w-[160px]">
+              {CLOSURE_TYPES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  disabled={reportBusy}
+                  onClick={() => reportClosure(t.id)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-200 hover:bg-gray-800 disabled:opacity-50 border-b border-gray-800 last:border-0"
+                >
+                  <span>{t.emoji}</span> {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setReportOpen((v) => !v)}
+            className="flex items-center gap-1.5 rounded-xl bg-gray-900/85 backdrop-blur-sm px-2.5 py-1.5 border border-amber-500/40 text-amber-400 text-xs"
+            aria-expanded={reportOpen}
+          >
+            <span className="text-sm leading-none">⚠️</span>
+            {reportBusy ? "Reporting…" : "Report"}
+          </button>
+        </div>
 
-      {/* Layer toggles — bottom-left, mirror the wind chip */}
-      <div className="absolute bottom-3 left-3 flex flex-wrap items-center gap-1.5 max-w-[calc(100%-1.5rem)]">
-        <button
-          type="button"
-          onClick={() => setShowRestaurants((v) => !v)}
-          className={`flex items-center gap-1.5 rounded-xl bg-gray-900/85 backdrop-blur-sm px-2.5 py-1.5 border text-xs transition-colors ${
-            showRestaurants
-              ? "border-amber-500/40 text-amber-400"
-              : "border-gray-700/60 text-gray-500 hover:text-gray-300"
-          }`}
-          aria-pressed={showRestaurants}
-        >
-          <span className="text-sm leading-none">🍽</span>
-          Food {showRestaurants ? `(${restaurants.length})` : "off"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowBathrooms((v) => !v)}
-          className={`flex items-center gap-1.5 rounded-xl bg-gray-900/85 backdrop-blur-sm px-2.5 py-1.5 border text-xs transition-colors ${
-            showBathrooms
-              ? "border-emerald-500/40 text-emerald-400"
-              : "border-gray-700/60 text-gray-500 hover:text-gray-300"
-          }`}
-          aria-pressed={showBathrooms}
-        >
-          <span className="text-sm leading-none">🚻</span>
-          Restrooms {showBathrooms ? `(${bathrooms.length})` : "off"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowMedical((v) => !v)}
-          className={`flex items-center gap-1.5 rounded-xl bg-gray-900/85 backdrop-blur-sm px-2.5 py-1.5 border text-xs transition-colors ${
-            showMedical
-              ? "border-red-500/40 text-red-400"
-              : "border-gray-700/60 text-gray-500 hover:text-gray-300"
-          }`}
-          aria-pressed={showMedical}
-        >
-          <span className="text-sm leading-none">🏥</span>
-          Medical {showMedical ? `(${medical.length})` : "off"}
-        </button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShowRestaurants((v) => !v)}
+            className={`flex items-center gap-1.5 rounded-xl bg-gray-900/85 backdrop-blur-sm px-2.5 py-1.5 border text-xs transition-colors ${
+              showRestaurants
+                ? "border-amber-500/40 text-amber-400"
+                : "border-gray-700/60 text-gray-500 hover:text-gray-300"
+            }`}
+            aria-pressed={showRestaurants}
+          >
+            <span className="text-sm leading-none">🍽</span>
+            Food {showRestaurants ? `(${restaurants.length})` : "off"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowBathrooms((v) => !v)}
+            className={`flex items-center gap-1.5 rounded-xl bg-gray-900/85 backdrop-blur-sm px-2.5 py-1.5 border text-xs transition-colors ${
+              showBathrooms
+                ? "border-emerald-500/40 text-emerald-400"
+                : "border-gray-700/60 text-gray-500 hover:text-gray-300"
+            }`}
+            aria-pressed={showBathrooms}
+          >
+            <span className="text-sm leading-none">🚻</span>
+            WC {showBathrooms ? `(${bathrooms.length})` : "off"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowMedical((v) => !v)}
+            className={`flex items-center gap-1.5 rounded-xl bg-gray-900/85 backdrop-blur-sm px-2.5 py-1.5 border text-xs transition-colors ${
+              showMedical
+                ? "border-red-500/40 text-red-400"
+                : "border-gray-700/60 text-gray-500 hover:text-gray-300"
+            }`}
+            aria-pressed={showMedical}
+          >
+            <span className="text-sm leading-none">🏥</span>
+            ER {showMedical ? `(${medical.length})` : "off"}
+          </button>
+        </div>
       </div>
 
       {/* Wind overlay */}
