@@ -8,11 +8,11 @@ export const revalidate = 0;
 export const maxDuration = 15;
 
 const MEDICAL_LIMIT = 5;
-// OSM Overpass is the slowest source and the one most likely to hang under
-// load. We give it 5s in full mode — if it makes it, great; if not, Mapbox
-// alone covers the vast majority of US hospitals and urgent cares.
-const OSM_TIMEOUT_MS = 5_000;
-const MAPBOX_TIMEOUT_MS = 4_000;
+// Tight timeouts — Mapbox is usually <800 ms and OSM Overpass <2s on a warm
+// cache. If either is slower than this on a given request, the other source
+// covers it and we'd rather return what we have than make the user wait.
+const OSM_TIMEOUT_MS = 3_000;
+const MAPBOX_TIMEOUT_MS = 3_000;
 
 function withTimeout<T>(p: Promise<T>, fallback: T, label: string, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -46,21 +46,30 @@ export async function GET(req: NextRequest) {
   if (!payload) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const lat = parseFloat(searchParams.get("lat") ?? "");
-  const lng = parseFloat(searchParams.get("lng") ?? "");
   const radiusMi = parseFloat(searchParams.get("radius") ?? "15");
-  // mode=fast skips OSM entirely so the client can paint Mapbox results in
-  // ~1s and then call again with mode=full for richer coverage.
-  const mode = searchParams.get("mode") ?? "full";
+  let lat = parseFloat(searchParams.get("lat") ?? "");
+  let lng = parseFloat(searchParams.get("lng") ?? "");
+  let resolvedPlace: { display: string } | undefined;
+
+  // Accept `?zip=XXXXX` so the client can do ZIP → results in a single
+  // round-trip. Saves a separate /api/geocode call on cellular, which was
+  // the biggest source of perceived latency from the phone.
+  const zip = searchParams.get("zip");
+  if ((isNaN(lat) || isNaN(lng)) && zip && /^\d{5}$/.test(zip.trim())) {
+    const z = await lookupZip(zip.trim());
+    if (z) {
+      lat = z.lat;
+      lng = z.lng;
+      resolvedPlace = { display: `${z.city}, ${z.state} ${z.postCode}` };
+    }
+  }
 
   if (isNaN(lat) || isNaN(lng)) {
-    return NextResponse.json({ error: "lat and lng required" }, { status: 400 });
+    return NextResponse.json({ error: "lat and lng (or zip) required" }, { status: 400 });
   }
 
   const [osmC, mapboxC] = await Promise.all([
-    mode === "fast"
-      ? Promise.resolve([])
-      : withTimeout(fetchOsmMedical(lat, lng, radiusMi), [], "osmMedical", OSM_TIMEOUT_MS),
+    withTimeout(fetchOsmMedical(lat, lng, radiusMi), [], "osmMedical", OSM_TIMEOUT_MS),
     withTimeout(
       fetchMapboxMedical(lat, lng, Math.min(radiusMi, 10)),
       [],
@@ -85,5 +94,45 @@ export async function GET(req: NextRequest) {
     })
     .slice(0, MEDICAL_LIMIT);
 
-  return NextResponse.json({ medical });
+  return NextResponse.json({ medical, place: resolvedPlace });
+}
+
+async function lookupZip(zip: string): Promise<ZipInfo | null> {
+  try {
+    const res = await fetch(`https://api.zippopotam.us/us/${zip}`, {
+      next: { revalidate: 86400 },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as ZippopotamResult;
+    const place = data.places?.[0];
+    if (!place) return null;
+    return {
+      city: place["place name"],
+      state: place["state abbreviation"],
+      postCode: data["post code"],
+      lat: parseFloat(place.latitude),
+      lng: parseFloat(place.longitude),
+    };
+  } catch {
+    return null;
+  }
+}
+
+interface ZipInfo {
+  city: string;
+  state: string;
+  postCode: string;
+  lat: number;
+  lng: number;
+}
+
+interface ZippopotamResult {
+  "post code": string;
+  country: string;
+  places: Array<{
+    "place name": string;
+    "state abbreviation": string;
+    latitude: string;
+    longitude: string;
+  }>;
 }

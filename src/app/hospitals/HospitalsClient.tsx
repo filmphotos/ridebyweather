@@ -34,7 +34,6 @@ function typeLabel(t: MedicalResult["type"]): { text: string; color: string } {
 export default function HospitalsClient() {
   const [zip, setZip] = useState("");
   const [loading, setLoading] = useState(false);
-  const [refining, setRefining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [place, setPlace] = useState<GeoResult | null>(null);
   const [results, setResults] = useState<MedicalResult[] | null>(null);
@@ -45,52 +44,32 @@ export default function HospitalsClient() {
     setResults(null);
     setPlace(null);
 
-    if (!/^\d{5}$/.test(zip.trim())) {
+    const z = zip.trim();
+    if (!/^\d{5}$/.test(z)) {
       setError("Enter a 5-digit US ZIP code.");
       return;
     }
 
     setLoading(true);
-    setRefining(false);
     try {
-      const geoRes = await fetch(`/api/geocode?q=${encodeURIComponent(zip.trim())}`);
-      if (!geoRes.ok) throw new Error("Geocoding failed");
-      const geoData = (await geoRes.json()) as { results: GeoResult[] };
-      const hit = geoData.results?.[0];
-      if (!hit) {
+      // Single round trip: server resolves the ZIP itself and runs Mapbox
+      // and OSM Overpass in parallel. On cellular this is ~3× faster than
+      // the previous geocode → fast → full chain.
+      const res = await fetch(`/api/medical?zip=${encodeURIComponent(z)}&radius=15`);
+      if (!res.ok) throw new Error("Medical lookup failed");
+      const data = (await res.json()) as {
+        medical: MedicalResult[];
+        place?: { display: string };
+      };
+      if (!data.place) {
         setError("ZIP not found. Try another.");
-        setLoading(false);
         return;
       }
-      setPlace(hit);
-
-      // Two-pass fetch: paint Mapbox results first (~1s), then quietly refine
-      // with the OSM-augmented results when they arrive (~5s). The user gets
-      // something to look at while OSM catches up.
-      const fastRes = await fetch(
-        `/api/medical?lat=${hit.lat}&lng=${hit.lng}&radius=15&mode=fast`
-      );
-      if (!fastRes.ok) throw new Error("Medical lookup failed");
-      const fastData = (await fastRes.json()) as { medical: MedicalResult[] };
-      setResults(fastData.medical ?? []);
-      setLoading(false);
-
-      setRefining(true);
-      try {
-        const fullRes = await fetch(
-          `/api/medical?lat=${hit.lat}&lng=${hit.lng}&radius=15&mode=full`
-        );
-        if (fullRes.ok) {
-          const fullData = (await fullRes.json()) as { medical: MedicalResult[] };
-          if ((fullData.medical?.length ?? 0) > 0) {
-            setResults(fullData.medical);
-          }
-        }
-      } finally {
-        setRefining(false);
-      }
+      setPlace({ name: data.place.display, display: data.place.display, lat: 0, lng: 0, country: "US" });
+      setResults(data.medical ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
       setLoading(false);
     }
   }
@@ -125,16 +104,8 @@ export default function HospitalsClient() {
       )}
 
       {place && (
-        <div className="mb-4 flex items-center justify-between gap-3 text-sm text-gray-400">
-          <div>
-            Showing results near <span className="text-white">{place.display}</span>
-          </div>
-          {refining && (
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-gray-700 border-t-sky-400" />
-              Refining…
-            </div>
-          )}
+        <div className="mb-4 text-sm text-gray-400">
+          Showing results near <span className="text-white">{place.display}</span>
         </div>
       )}
 
