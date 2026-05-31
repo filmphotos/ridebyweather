@@ -15,6 +15,7 @@ interface Prefs {
   temperatureMin: number | null;
   temperatureMax: number | null;
   weightLb: number | null;
+  ftpWatts: number | null;
 }
 
 const DEFAULT: Prefs = {
@@ -26,6 +27,7 @@ const DEFAULT: Prefs = {
   temperatureMin: null,
   temperatureMax: null,
   weightLb: null,
+  ftpWatts: null,
 };
 
 const KG_TO_LB = 2.20462262;
@@ -143,6 +145,27 @@ function SettingsInner() {
               value={prefs.ebikeMode}
               onChange={(v) => set("ebikeMode", v)}
             />
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                FTP (watts)
+              </label>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={50}
+                max={2000}
+                placeholder="e.g. 220"
+                value={prefs.ftpWatts ?? ""}
+                onChange={(e) =>
+                  set("ftpWatts", e.target.value === "" ? null : Math.round(Number(e.target.value)))
+                }
+                className="w-32 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-sky-500"
+              />
+              <p className="text-xs text-gray-500 mt-2">
+                Functional Threshold Power. Used on the Indoor Training page to convert workout
+                targets into watts. Leave blank to show targets as % FTP.
+              </p>
+            </div>
           </Section>
         )}
 

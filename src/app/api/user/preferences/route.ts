@@ -12,6 +12,7 @@ const PrefsSchema = z.object({
   temperatureMin: z.number().nullable().optional(),
   temperatureMax: z.number().nullable().optional(),
   weightLb: z.number().positive().max(1000).nullable().optional(),
+  ftpWatts: z.number().int().positive().max(2000).nullable().optional(),
 });
 
 async function getUser(req: NextRequest) {
@@ -40,6 +41,7 @@ export async function GET(req: NextRequest) {
       temperatureMin: null,
       temperatureMax: null,
       weightLb: null,
+      ftpWatts: null,
     });
   }
 
