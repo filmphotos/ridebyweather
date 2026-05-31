@@ -18,7 +18,8 @@ const PUBLIC_PAGES = new Set<string>([
 // Pages matched by prefix (dynamic segments). The live-ride "watch" page is
 // intentionally public so family/friends without an account can follow along;
 // the unguessable token in the URL is the access control.
-const PUBLIC_PAGE_PREFIXES = ["/watch/"];
+// /guides is public editorial content (SEO).
+const PUBLIC_PAGE_PREFIXES = ["/watch/", "/guides"];
 
 const PUBLIC_API_PREFIXES = [
   "/api/auth/login",
@@ -30,6 +31,8 @@ const PUBLIC_API_PREFIXES = [
   "/api/stripe/webhook",
   // Cron endpoint — authenticates with CRON_SECRET in the handler, no user cookie.
   "/api/push/check-storms",
+  // Weekly digest cron — handler auths Bearer for cron, cookie for user preview.
+  "/api/digest/weekly",
   // Device pairing: the device has no user cookie. /code issues a code,
   // /poll exchanges the secret for a token, /qr renders the QR image.
   // (/api/device/approve is intentionally NOT public — it needs the logged-in user.)

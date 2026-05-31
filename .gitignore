@@ -6,6 +6,7 @@ node_modules/
 out/
 
 # env files — keep .env.example, ignore secrets
+.env
 .env.local
 .env.*.local
 

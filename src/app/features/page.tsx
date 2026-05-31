@@ -365,6 +365,248 @@ const detailedFeatures = [
       "Score-at-start in the event note",
     ],
   },
+  {
+    icon: "🚲",
+    title: "Commute Mode",
+    tagline: "Morning ride out + evening ride home, side by side.",
+    description:
+      "Two cards: AM departure and PM return, with the delta highlighted. The single best feature for daily bike commuters — no more guessing whether to bring rain gear.",
+    bullets: [
+      "Set your own AM and PM times",
+      "PM-vs-AM delta in one number",
+      "Plain-language verdict each morning",
+    ],
+  },
+  {
+    icon: "💰",
+    title: "Bike vs Drive",
+    tagline: "Real cost of skipping the bike today.",
+    description:
+      "Today's gas saved, IRS-rate cost saved, CO₂ avoided, and calories burned — for your commute. Daily, weekly, and yearly views.",
+    bullets: [
+      "Round-trip dollars and gas",
+      "EPA-grade CO₂ accounting",
+      "Per-mile calorie burn",
+    ],
+  },
+  {
+    icon: "🛞",
+    title: "Tire Pressure Calculator",
+    tagline: "Front and rear PSI, tuned to today.",
+    description:
+      "Silca-style pressure model — your system weight, tire width, surface, and tubeless setup. Front and rear PSI with the right 48/52 split.",
+    bullets: [
+      "Smooth, rough, wet, gravel, MTB surfaces",
+      "Tubeless adjustment",
+      "Wet-road grip drop built in",
+    ],
+  },
+  {
+    icon: "⛓️",
+    title: "Chain Lube Selector",
+    tagline: "Wet, dry, or ceramic — decided.",
+    description:
+      "Pulls the next 7 days of precip and picks the right lube. Stops the wet-vs-dry argument; matches the week, not your last guess.",
+    bullets: [
+      "Wet days vs total days",
+      "Ceramic-wax window detection",
+      "Re-lube reminders after rain rides",
+    ],
+  },
+  {
+    icon: "🛣️",
+    title: "Road Conditions",
+    tagline: "Wet pavement, frost, and ice risk.",
+    description:
+      "Derived from the same hourly forecast that powers your Ride Score. 12-hour outlook for wet, drying, frost-risk, and ice windows.",
+    bullets: [
+      "Wet-now and wet-soon advisories",
+      "Black-ice and frost detection",
+      "Per-hour visual strip",
+    ],
+  },
+  {
+    icon: "🗓️",
+    title: "Event Countdown",
+    tagline: "Pin a race date, watch the forecast trajectory.",
+    description:
+      "Race, gran fondo, century, big group ride — pin it. Once it enters the 14-day window the daily score appears, and you can plan your taper around the weather.",
+    bullets: [
+      "Persistent pin",
+      "14-day score trajectory",
+      "Event-day breakout card",
+    ],
+    proBadge: true,
+  },
+  {
+    icon: "🔧",
+    title: "Service Intervals",
+    tagline: "Drivetrain, brakes, tires — never overdue.",
+    description:
+      "Log lifetime miles, track miles since each component was serviced. Smart defaults for chain, cassette, brake pads (rim & disc), tires, cables, bar tape, and tubeless sealant.",
+    bullets: [
+      "Color-coded due / overdue status",
+      "Quick + miles and bulk mileage entry",
+      "Per-component last-done tracking",
+    ],
+  },
+  {
+    icon: "🌼",
+    title: "Pollen Index",
+    tagline: "Grass, tree, weed, ragweed — covered.",
+    description:
+      "Allergy-sensitive riders need pollen, not just AQI. Per-type breakdown plus a peak grains/m³ figure with rider impact.",
+    bullets: [
+      "Grass, tree, weed, birch, alder, ragweed",
+      "Hourly average — peak picked for the day",
+      "Allergy-friendly riding advice",
+    ],
+  },
+  {
+    icon: "🫁",
+    title: "Sensitive Lungs Mode",
+    tagline: "Asthma-aware ride verdict.",
+    description:
+      "Combines AQI, humidity, cold-air bronchospasm risk, ozone, and pollen into one safety call. Built for riders with exercise-induced bronchospasm or asthma.",
+    bullets: [
+      "Trigger-by-trigger breakdown",
+      "Pre-medication reminders",
+      "Stay-inside threshold",
+    ],
+  },
+  {
+    icon: "👨‍👩‍👧",
+    title: "Family Mode",
+    tagline: "Kid- and trailer-friendly verdict.",
+    description:
+      "Gentler thresholds. Wind matters more (trailers act like sails), gusts matter a lot, cold matters more. One verdict before you load the kids.",
+    bullets: [
+      "Trailer wind-modifier",
+      "Tighter feels-like comfort band",
+      "Stroller-friendly walking score",
+    ],
+  },
+  {
+    icon: "📅",
+    title: "On This Day",
+    tagline: "What today's weather did, the last 5 years.",
+    description:
+      "Open-Meteo archive: high/low temp, max wind, precip on today's date in each of the last 5 years, plus a 5-year mean. Useful for trip planning and pure nostalgia.",
+    bullets: [
+      "Year-by-year history",
+      "5-year mean for the date",
+      "Free, no key needed",
+    ],
+  },
+  {
+    icon: "🎙️",
+    title: "Morning Briefing",
+    tagline: "20-second spoken summary + shareable card.",
+    description:
+      "A four-sentence forecast briefing read aloud through SpeechSynthesis, plus a download-as-PNG square card for sharing. The fastest path to today's plan.",
+    bullets: [
+      "Browser TTS playback",
+      "Auto-rendered square card",
+      "Brand mark + score ring",
+    ],
+  },
+  {
+    icon: "🏠",
+    title: "Indoor Fallback",
+    tagline: "When the score crashes, ride inside on purpose.",
+    description:
+      "Matches an indoor workout (recovery, endurance, sweet-spot, threshold, or VO2) to the duration you would have ridden outside. Curated, TSS-aware library.",
+    bullets: [
+      "Duration-matched picks",
+      "TSS estimates per workout",
+      "Auto-suggests easier options when conditions are bad",
+    ],
+  },
+  {
+    icon: "🕳️",
+    title: "Hazard Pins",
+    tagline: "Potholes, debris, glass, closures.",
+    description:
+      "Drop a pin where the road bites. Pins expire after 30 days so the map stays current. Phase 1 saves locally on your device; community sync comes next.",
+    bullets: [
+      "5 hazard types",
+      "GPS-grab one-tap",
+      "Auto-expiry keeps map clean",
+    ],
+  },
+  {
+    icon: "🎁",
+    title: "Referral Credit",
+    tagline: "Refer a friend, both get Pro free.",
+    description:
+      "Share your invite link — when a friend signs up, you each get a free month of Pro on us. Native share and email built in.",
+    bullets: [
+      "Personal short code per user",
+      "Web Share API + email fallback",
+      "Tracked for credit on first upgrade",
+    ],
+  },
+  {
+    icon: "✉️",
+    title: "Weekly Digest Email",
+    tagline: "Sunday: this week's best ride day.",
+    description:
+      "Per-user weekly summary emailed Sunday morning. 7-day Ride Score forecast with the best day highlighted plus full conditions.",
+    bullets: [
+      "Best ride day callout",
+      "Day-by-day score table",
+      "Sent at your saved location",
+    ],
+  },
+  {
+    icon: "⚡",
+    title: "Lightning Map",
+    tagline: "Storm cells, 30-30 rule, get-indoors call.",
+    description:
+      "12-hour thunderstorm awareness with the 30-30 safety rule baked in. Live strike feed wired and ready for the Vaisala / Blitzortung integration.",
+    bullets: [
+      "Storm-now / arrives-in advisory",
+      "Hour-by-hour strike strip",
+      "Lightning safety reminders",
+    ],
+  },
+  {
+    icon: "📖",
+    title: "City Ride Guides",
+    tagline: "Curated rides, season by season.",
+    description:
+      "Hand-written guides for Portland, Boulder, NYC, SF, Austin, and Chicago. Climatology, season-by-season tips, and signature rides with wind-direction tactics.",
+    bullets: [
+      "Public, SEO-indexable",
+      "Signature rides per city",
+      "Best-wind-direction tactics",
+    ],
+  },
+  {
+    icon: "🔒",
+    title: "Bike Theft Hotspots",
+    tagline: "Where not to lock up.",
+    description:
+      "Neighborhood-level risk index for major US cycling cities. Decide whether to lock outside or bring the bike inside before you ride downtown.",
+    bullets: [
+      "0–10 risk score per neighborhood",
+      "Lock-strategy advice per area",
+      "City open-data integrations next",
+    ],
+  },
+  {
+    icon: "🟠",
+    title: "Strava Calibration",
+    tagline: "Personal thresholds from your real rides.",
+    description:
+      "Connect Strava and we import your last 90 days. The Ride Score retunes to your actual tolerance — not the generic baseline. OAuth ready.",
+    bullets: [
+      "Read-only — never posts to your profile",
+      "Last 90 days of activity types",
+      "Per-sport threshold retuning",
+    ],
+    proBadge: true,
+  },
 ];
 
 // Each advertised feature maps to the page that actually delivers it. Features
@@ -397,6 +639,26 @@ const featureLinks: Record<string, string> = {
   "Bike Type Profiles": "/bike-profiles",
   "Calendar Sync for Group Rides": "/group-rides",
   "Installable PWA": "/cycling",
+  "Commute Mode": "/commute",
+  "Bike vs Drive": "/bike-vs-drive",
+  "Tire Pressure Calculator": "/tire-pressure",
+  "Chain Lube Selector": "/chain-lube",
+  "Road Conditions": "/road-conditions",
+  "Event Countdown": "/event",
+  "Service Intervals": "/maintenance",
+  "Pollen Index": "/pollen",
+  "Sensitive Lungs Mode": "/asthma",
+  "Family Mode": "/family",
+  "On This Day": "/on-this-day",
+  "Morning Briefing": "/briefing",
+  "Indoor Fallback": "/indoor",
+  "Hazard Pins": "/hazards",
+  "Referral Credit": "/referrals",
+  "Weekly Digest Email": "/settings",
+  "Lightning Map": "/lightning",
+  "City Ride Guides": "/guides",
+  "Bike Theft Hotspots": "/theft",
+  "Strava Calibration": "/strava",
 };
 
 const faqs = [
