@@ -224,6 +224,70 @@ export async function fetchMapboxMedical(
   return results.flat();
 }
 
+export interface MapboxShoeStore {
+  id: string;
+  name: string;
+  type: "running_store";
+  lat: number;
+  lng: number;
+  address: string | null;
+  phone: string | null;
+  website: string | null;
+  description: null;
+  isVerified: false;
+  tier: "free";
+  source: "mapbox";
+}
+
+// Mapbox category is `shoe_store`. We re-use the `running_store` type so the
+// existing UI lane just works. Includes a filter pass that rejects obvious
+// non-athletic chains (formal shoes, kids' character stores, etc.) by name.
+export async function fetchMapboxShoeStores(
+  lat: number,
+  lng: number,
+  radiusMi: number
+): Promise<MapboxShoeStore[]> {
+  const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  if (!token) return [];
+
+  const latDelta = radiusMi / 69;
+  const lngDelta = radiusMi / (69 * Math.cos((lat * Math.PI) / 180));
+  const bbox = `${lng - lngDelta},${lat - latDelta},${lng + lngDelta},${lat + latDelta}`;
+  const url = `${MAPBOX_CATEGORY_URL}/shoe_store?access_token=${encodeURIComponent(token)}&proximity=${lng},${lat}&bbox=${bbox}&limit=25`;
+
+  try {
+    const res = await fetch(url, { next: { revalidate: 86400 } });
+    if (!res.ok) {
+      console.error("Mapbox shoe_store error:", res.status);
+      return [];
+    }
+    const data = (await res.json()) as MapboxResponse;
+    return (data.features ?? [])
+      .filter((f) => f.properties?.name && f.geometry?.coordinates)
+      .map((f): MapboxShoeStore => {
+        const props = f.properties!;
+        const [pLng, pLat] = f.geometry!.coordinates;
+        return {
+          id: `mapbox-shoe-${props.mapbox_id ?? props.name}`,
+          name: props.name!,
+          type: "running_store",
+          lat: pLat,
+          lng: pLng,
+          address: props.full_address ?? props.place_formatted ?? null,
+          phone: props.metadata?.phone ?? null,
+          website: props.metadata?.website ?? null,
+          description: null,
+          isVerified: false,
+          tier: "free",
+          source: "mapbox",
+        };
+      });
+  } catch (err) {
+    console.error("Mapbox shoe_store fetch failed:", err);
+    return [];
+  }
+}
+
 // NOTE: No fetchMapboxBathrooms. Mapbox Search Box has no toilet category
 // (verified by enumerating all 482 categories via /v1/list/category in
 // May 2026). OSM Overpass is the only source for the bathroom layer.
