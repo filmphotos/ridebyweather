@@ -624,7 +624,7 @@ export default function RideMap({ points, heading, windDirDeg, windSpeedMph }: P
             aria-pressed={showBathrooms}
           >
             <span className="text-sm leading-none">🚻</span>
-            WC {showBathrooms ? `(${bathrooms.length})` : "off"}
+            Restrooms {showBathrooms ? `(${bathrooms.length})` : "off"}
           </button>
           <button
             type="button"
