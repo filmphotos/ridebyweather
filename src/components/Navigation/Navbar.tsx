@@ -115,6 +115,7 @@ export default function Navbar() {
   const [tier, setTier] = useState<string>("free");
   const [menuOpen, setMenuOpen] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [portalError, setPortalError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -137,14 +138,17 @@ export default function Navbar() {
 
   async function handleManageBilling() {
     setPortalLoading(true);
+    setPortalError(null);
     try {
       const res = await fetch("/api/stripe/portal", { method: "POST" });
       const data = await res.json();
-      if (data.url) {
+      if (res.ok && data.url) {
         window.location.href = data.url;
+        return;
       }
+      setPortalError(data.error ?? "Couldn't open billing. Please try again.");
     } catch {
-      // silently fail
+      setPortalError("Network error. Please try again.");
     } finally {
       setPortalLoading(false);
     }
@@ -329,16 +333,23 @@ export default function Navbar() {
                 )}
 
                 {isPaid && (
-                  <button
-                    onClick={() => { setMenuOpen(false); handleManageBilling(); }}
-                    disabled={portalLoading}
-                    className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-gray-800 transition-colors border-b border-gray-800 disabled:opacity-50"
-                  >
-                    <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M2.5 4A1.5 1.5 0 001 5.5v1A1.5 1.5 0 002.5 8h15A1.5 1.5 0 0019 6.5v-1A1.5 1.5 0 0017.5 4h-15zM1 11.5A1.5 1.5 0 012.5 10h15a1.5 1.5 0 010 3h-15A1.5 1.5 0 011 11.5zM2.5 16a1.5 1.5 0 000 3h10a1.5 1.5 0 000-3h-10z" />
-                    </svg>
-                    {portalLoading ? "Opening…" : "Manage billing"}
-                  </button>
+                  <>
+                    <button
+                      onClick={() => handleManageBilling()}
+                      disabled={portalLoading}
+                      className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-gray-800 transition-colors border-b border-gray-800 disabled:opacity-50"
+                    >
+                      <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M2.5 4A1.5 1.5 0 001 5.5v1A1.5 1.5 0 002.5 8h15A1.5 1.5 0 0019 6.5v-1A1.5 1.5 0 0017.5 4h-15zM1 11.5A1.5 1.5 0 012.5 10h15a1.5 1.5 0 010 3h-15A1.5 1.5 0 011 11.5zM2.5 16a1.5 1.5 0 000 3h10a1.5 1.5 0 000-3h-10z" />
+                      </svg>
+                      {portalLoading ? "Opening…" : "Manage billing"}
+                    </button>
+                    {portalError && (
+                      <p className="px-4 py-2 text-xs text-red-400 border-b border-gray-800">
+                        {portalError}
+                      </p>
+                    )}
+                  </>
                 )}
 
                 <button
