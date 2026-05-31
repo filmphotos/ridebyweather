@@ -18,6 +18,62 @@ const rideScoreFactors = [
 
 const detailedFeatures = [
   {
+    icon: "🤖",
+    title: "AI Ride Assistant",
+    tagline: "Ask anything. Get answers from your real forecast.",
+    description:
+      "A chat assistant powered by Claude that knows your saved spots, your current conditions, and the next 36 hours of weather. Ask what to wear, when to leave, or which spot has the best window — no generic AI weather hallucinations.",
+    bullets: [
+      "Grounded in your actual forecast and Ride Scores",
+      "Knows your saved ride spots and recommends across them",
+      "Specific clothing suggestions, not vague \"warm layers\"",
+      "Streams answers token-by-token",
+    ],
+    proBadge: true,
+  },
+  {
+    icon: "📍",
+    title: "Where Should I Ride?",
+    tagline: "Rank your favorite spots by today's best window.",
+    description:
+      "Save up to 10 ride starting points — home, the trailhead, the cabin — and the scanner ranks them by upcoming 2-hour Ride Score. Tomorrow's best window: Lake Loop 8.4. The shortcut for riders with options.",
+    bullets: [
+      "Up to 10 saved spots (Free includes 1)",
+      "Parallel forecast scan across every spot",
+      "Top-pick callout with temp, wind, and score",
+      "One-tap rescan whenever the forecast moves",
+    ],
+    proBadge: true,
+  },
+  {
+    icon: "⏱️",
+    title: "24-Hour Route Forecast",
+    tagline: "Find the best departure window for THIS route.",
+    description:
+      "Pick any route on the map and see a 24-bar timeline of Ride Scores — each hour scored against your actual segments and the wind at that hour. The bar chart shows exactly when to leave for the tailwind home.",
+    bullets: [
+      "Route-aware scoring (your bearings × the hour's wind)",
+      "Best departure highlighted with score + conditions",
+      "Click any bar for full conditions detail",
+      "Works on saved routes and freshly drawn ones",
+    ],
+    proBadge: true,
+  },
+  {
+    icon: "🌬️",
+    title: "Daily Best-Window Push",
+    tagline: "Tomorrow's perfect ride window, delivered overnight.",
+    description:
+      "Each evening you get one push notification with tomorrow's best contiguous 2-hour riding window. Only fires when conditions are actually good — no spam on rainy weeks.",
+    bullets: [
+      "Score-threshold gated (sends only when ≥ GOOD)",
+      "Per-location: uses your saved push location",
+      "Includes temp, wind, and condition summary",
+      "Independent of storm alerts — toggle separately",
+    ],
+    proBadge: true,
+  },
+  {
     icon: "🌡️",
     title: "Ride Score (0–10)",
     tagline: "One number, all the signal.",
@@ -314,6 +370,10 @@ const detailedFeatures = [
 // Each advertised feature maps to the page that actually delivers it. Features
 // without an entry (e.g. Device Integrations) are genuinely not live yet.
 const featureLinks: Record<string, string> = {
+  "AI Ride Assistant": "/ask",
+  "Where Should I Ride?": "/spots",
+  "24-Hour Route Forecast": "/routes",
+  "Daily Best-Window Push": "/settings",
   "Ride Score (0–10)": "/ride-score",
   "Wind-Aware Routing": "/routes",
   "Gear Recommendations": "/gear",
@@ -342,7 +402,7 @@ const featureLinks: Record<string, string> = {
 const faqs = [
   {
     q: "Do I need to pay to use RideByWeather?",
-    a: "No. The Free tier is forever-free and covers the basic Ride Score, current forecast, gear avatar, group rides, e-bike law lookups, and 3 saved routes. Pro ($9/mo) unlocks the wind-aware routing engine and the 48-hour timeline.",
+    a: "No. The Free tier is forever-free and covers the basic Ride Score, 7-day forecast, gear avatar, group rides, e-bike law lookups, 1 saved ride spot, and 3 saved routes. Pro ($9/mo) unlocks the AI Ride Assistant, the multi-location \"Where should I ride?\" scanner, the 24-hour route forecast, daily best-window push alerts, and the 14-day outlook.",
   },
   {
     q: "How accurate is the Ride Score?",
@@ -367,12 +427,13 @@ const faqs = [
 ];
 
 const proFeatures = [
-  "48-hour forecast timeline",
+  "AI Ride Assistant — chat grounded in your real forecast",
+  "“Where should I ride?” scanner — rank 10 saved spots",
+  "24-hour route forecast (pick the best departure window)",
+  "Daily best-window push alerts",
+  "14-day Ride Score forecast (vs 7)",
   "Wind-aware route optimization",
-  "Headwind / tailwind per segment",
-  "Auto reverse route suggestion",
   "Unlimited saved routes",
-  "Garmin & Wahoo push alerts (coming soon)",
   "Historical weather replay",
 ];
 
