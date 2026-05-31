@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import LocationSearch, { type PickedLocation } from "@/components/LocationSearch/LocationSearch";
 import { heatIndexF, heatIndexCategory, hydrationPlan, type Intensity } from "@/lib/hydration";
 
@@ -24,6 +24,48 @@ export default function HydrationClient() {
 
   const [durationMin, setDurationMin] = useState(90);
   const [intensity, setIntensity] = useState<Intensity>("moderate");
+  // Persist personal stats across sessions — rider weight rarely changes day
+  // to day and re-typing it each visit is annoying.
+  const [weightLb, setWeightLb] = useState<number | "">("");
+  const [heightFt, setHeightFt] = useState<number | "">("");
+  const [heightIn, setHeightIn] = useState<number | "">("");
+
+  // Load saved stats on first render.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("rbw_hydration_stats");
+      if (!raw) return;
+      const s = JSON.parse(raw) as { weightLb?: number; heightFt?: number; heightIn?: number };
+      if (typeof s.weightLb === "number") setWeightLb(s.weightLb);
+      if (typeof s.heightFt === "number") setHeightFt(s.heightFt);
+      if (typeof s.heightIn === "number") setHeightIn(s.heightIn);
+    } catch {
+      // ignore corrupt cache
+    }
+  }, []);
+
+  // Save stats whenever any of the three change.
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "rbw_hydration_stats",
+        JSON.stringify({
+          weightLb: typeof weightLb === "number" ? weightLb : undefined,
+          heightFt: typeof heightFt === "number" ? heightFt : undefined,
+          heightIn: typeof heightIn === "number" ? heightIn : undefined,
+        })
+      );
+    } catch {
+      // ignore quota / privacy mode
+    }
+  }, [weightLb, heightFt, heightIn]);
+
+  const totalHeightIn =
+    typeof heightFt === "number" && typeof heightIn === "number"
+      ? heightFt * 12 + heightIn
+      : typeof heightFt === "number"
+      ? heightFt * 12
+      : undefined;
 
   const load = useCallback(async (loc: PickedLocation) => {
     setLoading(true);
@@ -56,7 +98,14 @@ export default function HydrationClient() {
   const hiCat = hi != null ? heatIndexCategory(hi) : null;
   const plan =
     conditions != null
-      ? hydrationPlan({ tempF: conditions.tempF, humidity: conditions.humidity, durationMin, intensity })
+      ? hydrationPlan({
+          tempF: conditions.tempF,
+          humidity: conditions.humidity,
+          durationMin,
+          intensity,
+          weightLb: typeof weightLb === "number" ? weightLb : undefined,
+          heightIn: totalHeightIn,
+        })
       : null;
 
   return (
@@ -144,6 +193,56 @@ export default function HydrationClient() {
                 ))}
               </div>
             </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              <div>
+                <label className="text-xs text-gray-400" htmlFor="hyd-weight">Weight (lb)</label>
+                <input
+                  id="hyd-weight"
+                  type="number"
+                  inputMode="numeric"
+                  min={80}
+                  max={350}
+                  placeholder="165"
+                  value={weightLb === "" ? "" : String(weightLb)}
+                  onChange={(e) => setWeightLb(e.target.value === "" ? "" : Number(e.target.value))}
+                  className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-sky-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400" htmlFor="hyd-ft">Height (ft)</label>
+                <input
+                  id="hyd-ft"
+                  type="number"
+                  inputMode="numeric"
+                  min={4}
+                  max={7}
+                  placeholder="5"
+                  value={heightFt === "" ? "" : String(heightFt)}
+                  onChange={(e) => setHeightFt(e.target.value === "" ? "" : Number(e.target.value))}
+                  className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-sky-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400" htmlFor="hyd-in">(in)</label>
+                <input
+                  id="hyd-in"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={11}
+                  placeholder="8"
+                  value={heightIn === "" ? "" : String(heightIn)}
+                  onChange={(e) => setHeightIn(e.target.value === "" ? "" : Number(e.target.value))}
+                  className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-900 px-2 py-1.5 text-sm text-gray-100 focus:outline-none focus:border-sky-500"
+                />
+              </div>
+            </div>
+            {weightLb === "" && (
+              <p className="mt-1 text-[11px] text-gray-500">
+                Enter weight to personalize sweat-rate estimates. Saved on this device.
+              </p>
+            )}
 
             <div className="mt-5 grid grid-cols-3 gap-3 border-t border-gray-800 pt-4 text-center">
               <Stat label="Per hour" value={`${plan.mlPerHour} ml`} />

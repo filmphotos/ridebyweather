@@ -2,11 +2,14 @@
  * US state-by-state e-bike laws and restrictions.
  *
  * Sources: NCSL (National Conference of State Legislatures), PeopleForBikes
- * model legislation tracker, state DMV/DOT pages. Last reviewed: 2026-05.
+ * state-by-state guide (peopleforbikes.org), state DMV/DOT pages.
+ * Last reviewed: 2026-05.
  *
  * NOT LEGAL ADVICE. Laws change frequently and local jurisdictions (cities,
  * parks, HOAs) can impose stricter rules. Always verify with local authorities
- * before riding.
+ * before riding. The `notes` field summarizes but cannot replace primary
+ * sources — every state law card on the website links back to the PeopleForBikes
+ * state guide and the NCSL e-bike legislation tracker for verification.
  *
  * Class definitions (the de facto US standard, codified in ~40 states):
  *   Class 1 — pedal-assist only, motor cuts at 20 mph
@@ -44,10 +47,10 @@ export const EBIKE_LAWS: StateEbikeLaw[] = [
     hasBan: false,
   },
   {
-    state: "Alaska", abbr: "AK", threeClassSystem: false, minAgeClass3: null,
+    state: "Alaska", abbr: "AK", threeClassSystem: true, minAgeClass3: null,
     helmet: "No statewide adult helmet law.",
-    bikePathAccess: "localOption", class3PathAccess: "localOption",
-    notes: "No specific e-bike statute. E-bikes generally treated as bicycles if motor under 1 hp. Local municipalities set trail rules.",
+    bikePathAccess: "allowed", class3PathAccess: "roadwayOnly",
+    notes: "Adopted 3-class system (HB 73, 2024). E-bikes are no longer treated as motor vehicles when within the class limits. Local municipalities still set trail rules.",
     hasBan: false,
   },
   {
@@ -142,17 +145,17 @@ export const EBIKE_LAWS: StateEbikeLaw[] = [
     hasBan: false,
   },
   {
-    state: "Kansas", abbr: "KS", threeClassSystem: false, minAgeClass3: null,
+    state: "Kansas", abbr: "KS", threeClassSystem: true, minAgeClass3: null,
     helmet: "No statewide helmet law.",
-    bikePathAccess: "localOption", class3PathAccess: "localOption",
-    notes: "E-bikes treated as 'electric-assisted bicycles' if under 1 hp / 20 mph. Higher-power bikes treated as motorized bicycles — driver's license required.",
+    bikePathAccess: "allowed", class3PathAccess: "roadwayOnly",
+    notes: "Adopted 3-class system (HB 2087, 2020). E-bikes treated as bicycles within the class limits; no license, registration, or insurance required.",
     hasBan: false,
   },
   {
-    state: "Kentucky", abbr: "KY", threeClassSystem: false, minAgeClass3: null,
+    state: "Kentucky", abbr: "KY", threeClassSystem: true, minAgeClass3: null,
     helmet: "No statewide helmet law.",
-    bikePathAccess: "localOption", class3PathAccess: "localOption",
-    notes: "No specific e-bike statute. Bikes with motors typically classified as mopeds if exceeding bicycle thresholds — may require license.",
+    bikePathAccess: "allowed", class3PathAccess: "roadwayOnly",
+    notes: "Adopted 3-class system (HB 22, 2023). E-bikes within class limits treated as bicycles — no license, registration, or insurance required.",
     hasBan: false,
   },
   {
@@ -177,11 +180,11 @@ export const EBIKE_LAWS: StateEbikeLaw[] = [
     hasBan: false,
   },
   {
-    state: "Massachusetts", abbr: "MA", threeClassSystem: false, minAgeClass3: 16,
-    helmet: "Under 17 helmet required.",
-    bikePathAccess: "restricted", class3PathAccess: "roadwayOnly",
-    notes: "MA still classifies e-bikes as 'motorized bicycles' under older statute — license required and bikes technically banned from bike paths and sidewalks. Class 3 essentially treated as moped. Legislation to adopt 3-class system has been pending.",
-    hasBan: true,
+    state: "Massachusetts", abbr: "MA", threeClassSystem: true, minAgeClass3: 16,
+    helmet: "Under 17 helmet required (all bicycles). Class 3 helmet required for all ages.",
+    bikePathAccess: "allowed", class3PathAccess: "roadwayOnly",
+    notes: "Adopted 3-class system (Chapter 358 of the Acts of 2022, effective 2023). Resolved the long-standing problem that classified e-bikes as 'motorized bicycles'. Local municipalities (Boston, Cambridge, DCR-managed paths) may still restrict Class 3 on multi-use paths.",
+    hasBan: false,
   },
   {
     state: "Michigan", abbr: "MI", threeClassSystem: true, minAgeClass3: 14,
@@ -219,11 +222,11 @@ export const EBIKE_LAWS: StateEbikeLaw[] = [
     hasBan: false,
   },
   {
-    state: "Nebraska", abbr: "NE", threeClassSystem: false, minAgeClass3: null,
+    state: "Nebraska", abbr: "NE", threeClassSystem: true, minAgeClass3: 15,
     helmet: "No statewide helmet law.",
-    bikePathAccess: "localOption", class3PathAccess: "localOption",
-    notes: "Treated as 'motorized bicycle' if it has a motor — Class M license required and minimum age 14 to ride. Has not adopted 3-class framework.",
-    hasBan: true,
+    bikePathAccess: "allowed", class3PathAccess: "roadwayOnly",
+    notes: "Adopted 3-class system (LB 89, 2023). E-bikes no longer treated as motorized bicycles — no license, registration, or insurance required within class limits.",
+    hasBan: false,
   },
   {
     state: "Nevada", abbr: "NV", threeClassSystem: true, minAgeClass3: null,
@@ -255,10 +258,10 @@ export const EBIKE_LAWS: StateEbikeLaw[] = [
   },
   {
     state: "New York", abbr: "NY", threeClassSystem: true, minAgeClass3: 16,
-    helmet: "Helmet required for all Class 3 riders (NYC includes commercial Class 1/2 delivery riders). Under 14 helmet required.",
-    bikePathAccess: "allowed", class3PathAccess: "localOption",
-    notes: "Adopted 3-class system (2020). NYC-specific rules: throttle e-bikes were illegal until 2020 — now Class 1/2 capped at 25 mph in NYC, Class 3 capped at 25 mph for delivery riders. NYC parks ban e-bikes on most paths.",
-    hasBan: false,
+    helmet: "Under 18 must wear a helmet on a Class 3 e-bike. Under 14 helmet required on any bicycle.",
+    bikePathAccess: "allowed", class3PathAccess: "roadwayOnly",
+    notes: "NY's 3-class law (signed April 2020) diverges from the national model in two important ways: (1) NY Class 3 allows throttle assist up to 25 mph — it is NOT pedal-assist-only like California's model, and the speed cap is 25 mph not 28 mph. (2) Class 3 e-bikes are legal only in cities with population over 1 million — effectively NYC only. Operating a Class 3 outside NYC is not authorized statewide. Minimum age 16 to operate any class on public roads. NYC Department of Parks bans e-bikes on most park paths.",
+    hasBan: true,
   },
   {
     state: "North Carolina", abbr: "NC", threeClassSystem: false, minAgeClass3: 16,
@@ -289,11 +292,11 @@ export const EBIKE_LAWS: StateEbikeLaw[] = [
     hasBan: false,
   },
   {
-    state: "Oregon", abbr: "OR", threeClassSystem: false, minAgeClass3: 16,
+    state: "Oregon", abbr: "OR", threeClassSystem: true, minAgeClass3: 16,
     helmet: "Under 16 helmet required.",
-    bikePathAccess: "restricted", class3PathAccess: "roadwayOnly",
-    notes: "OR defines e-bikes as motor power under 1000W and max speed 20 mph — does NOT recognize Class 3 (28 mph). Class 3-style bikes treated as mopeds. Minimum age to operate: 16. Many natural-surface trails ban e-bikes.",
-    hasBan: true,
+    bikePathAccess: "allowed", class3PathAccess: "roadwayOnly",
+    notes: "Adopted 3-class system (HB 4103, 2024) — replaced the older 1000W / 20 mph ceiling that excluded Class 3. Minimum age 16 to operate any e-bike. State park and BLM natural-surface trails still restrict or ban e-bikes — check the specific unit.",
+    hasBan: false,
   },
   {
     state: "Pennsylvania", abbr: "PA", threeClassSystem: false, minAgeClass3: null,
@@ -408,3 +411,21 @@ export const FEDERAL_LAND_SUMMARY =
 export function getStateLaw(abbr: string): StateEbikeLaw | undefined {
   return EBIKE_LAWS.find((l) => l.abbr === abbr.toUpperCase());
 }
+
+/**
+ * Authoritative source links per state. The PeopleForBikes guide is the
+ * single best public summary; NCSL tracks pending legislation. Both are
+ * linked from each state card so users can verify before relying on the
+ * summary here.
+ */
+export const SOURCE_LINKS = {
+  peopleForBikesGuide: "https://www.peopleforbikes.org/electric-bikes/state-laws",
+  ncslTracker:
+    "https://www.ncsl.org/transportation/state-electric-bicycle-laws-a-legislative-primer",
+} as const;
+
+/**
+ * Date the dataset above was last reviewed end-to-end. Surfaced on the
+ * laws page so visitors can judge freshness at a glance.
+ */
+export const LAWS_LAST_REVIEWED = "2026-05";

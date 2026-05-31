@@ -49,6 +49,10 @@ export interface HydrationInput {
   humidity: number;
   durationMin: number;
   intensity: Intensity;
+  // Optional personalization. Without these we use the "average rider"
+  // (~165 lb / 68 in) defaults so legacy callers keep getting the old plan.
+  weightLb?: number;
+  heightIn?: number;
 }
 
 export interface HydrationPlan {
@@ -58,8 +62,13 @@ export interface HydrationPlan {
   bottles: number; // 24oz / ~710ml bottles
   electrolytes: boolean;
   advice: string;
+  // Estimated sodium target (mg) for the whole session, useful when the
+  // rider is mixing their own electrolytes.
+  sodiumMg: number;
 }
 
+// Per-hour sweat rates (ml) for the 165 lb / 75 kg reference rider.
+const REF_WEIGHT_LB = 165;
 const BASE_SWEAT_ML: Record<Intensity, number> = {
   easy: 400,
   moderate: 600,
@@ -72,16 +81,34 @@ export function hydrationPlan(input: HydrationInput): HydrationPlan {
   const hi = heatIndexF(input.tempF, input.humidity);
   // Heat multiplier: ramps from 1.0 at <=70°F HI to ~1.8 at 100°F+.
   const heatMult = 1 + Math.max(0, hi - 70) / 37.5;
-  const mlPerHour = Math.round(BASE_SWEAT_ML[input.intensity] * heatMult);
+
+  // Body-size scaling. Sweat rate scales roughly with body surface area,
+  // which for adults tracks weight more than height — so weight is the main
+  // dial. We bound the multiplier so a 100 lb walker doesn't get advised to
+  // drink almost nothing and a 280 lb rider doesn't blow past safe targets.
+  // Height nudges the result slightly for taller/leaner builds.
+  const weightLb = clamp(input.weightLb ?? REF_WEIGHT_LB, 80, 320);
+  const sizeMult = clamp(weightLb / REF_WEIGHT_LB, 0.7, 1.5);
+  const heightAdj = input.heightIn ? clamp((input.heightIn - 68) / 200, -0.05, 0.05) : 0;
+
+  const mlPerHour = Math.round(BASE_SWEAT_ML[input.intensity] * heatMult * (sizeMult + heightAdj));
   const totalMl = Math.round((mlPerHour * input.durationMin) / 60);
   const totalOz = Math.round(totalMl / 29.57);
   const bottles = Math.max(1, Math.ceil(totalMl / BOTTLE_ML));
   const electrolytes = input.durationMin > 60 || hi >= 85 || input.intensity === "hard";
 
+  // Sodium target: ~600 mg per liter is the upper end of the typical sweat
+  // sodium range. Only meaningful when electrolytes are advised.
+  const sodiumMg = electrolytes ? Math.round((totalMl / 1000) * 600) : 0;
+
   let advice: string;
   if (hi >= 104) advice = "Dangerous heat — consider rescheduling. If you ride, carry extra and stop at the first sign of trouble.";
-  else if (electrolytes) advice = "Add electrolytes (sodium 500–700 mg/L). Sip every 15 min, don't wait for thirst.";
+  else if (electrolytes) advice = `Add electrolytes (~${sodiumMg} mg sodium total). Sip every 15 min, don't wait for thirst.`;
   else advice = "Plain water is fine for this effort. Drink to thirst.";
 
-  return { mlPerHour, totalMl, totalOz, bottles, electrolytes, advice };
+  return { mlPerHour, totalMl, totalOz, bottles, electrolytes, advice, sodiumMg };
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(hi, Math.max(lo, n));
 }

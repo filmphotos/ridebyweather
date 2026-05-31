@@ -56,6 +56,7 @@ export default function GroupRideDetailClient({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [authed, setAuthed] = useState<boolean>(false);
   const [copied, setCopied] = useState(false);
+  const [showCal, setShowCal] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -150,24 +151,85 @@ export default function GroupRideDetailClient({ id }: { id: string }) {
     }
   }
 
-  function addToCalendar() {
-    if (!ride) return;
+  function calendarMeta() {
+    if (!ride) return null;
     const url = `${window.location.origin}/group-rides/${id}`;
     const descParts = [ride.description ?? ""];
     if (ride.distanceMi != null) descParts.push(`Distance: ${ride.distanceMi} mi`);
     if (ride.pace) descParts.push(`Pace: ${ride.pace}`);
     if (forecast) descParts.push(`Forecast Ride Score at start: ${forecast.score.toFixed(1)} (${forecast.label})`);
     descParts.push(url);
+    const description = descParts.filter(Boolean).join("\n");
+    const start = new Date(ride.startTime);
+    const end = new Date(start.getTime() + 120 * 60 * 1000);
+    return { url, description, start, end };
+  }
+
+  function addToCalendar() {
+    const meta = calendarMeta();
+    if (!ride || !meta) return;
     const ics = buildIcs({
       uid: ride.id,
       title: ride.name,
-      description: descParts.filter(Boolean).join("\n"),
+      description: meta.description,
       location: ride.locationName,
-      start: new Date(ride.startTime),
+      start: meta.start,
       durationMin: 120,
-      url,
+      url: meta.url,
     });
     downloadIcs(ride.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "group-ride", ics);
+    setShowCal(false);
+  }
+
+  // Google Calendar event URL — opens a pre-filled "create event" page that
+  // works with any Google account and falls back to a login prompt.
+  function googleCalendarUrl(): string | null {
+    const meta = calendarMeta();
+    if (!ride || !meta) return null;
+    const fmt = (d: Date) =>
+      d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const params = new URLSearchParams({
+      action: "TEMPLATE",
+      text: ride.name,
+      dates: `${fmt(meta.start)}/${fmt(meta.end)}`,
+      details: meta.description,
+      location: ride.locationName,
+    });
+    return `https://calendar.google.com/calendar/render?${params.toString()}`;
+  }
+
+  // Outlook.com / Microsoft 365 "deep link" — same trick, opens a new-event
+  // form pre-filled. Works for personal Outlook accounts.
+  function outlookCalendarUrl(): string | null {
+    const meta = calendarMeta();
+    if (!ride || !meta) return null;
+    const params = new URLSearchParams({
+      path: "/calendar/action/compose",
+      rru: "addevent",
+      subject: ride.name,
+      startdt: meta.start.toISOString(),
+      enddt: meta.end.toISOString(),
+      body: meta.description,
+      location: ride.locationName,
+    });
+    return `https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`;
+  }
+
+  // Yahoo Calendar — same shape, kept for users who still live there.
+  function yahooCalendarUrl(): string | null {
+    const meta = calendarMeta();
+    if (!ride || !meta) return null;
+    const fmt = (d: Date) =>
+      d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const params = new URLSearchParams({
+      v: "60",
+      title: ride.name,
+      st: fmt(meta.start),
+      et: fmt(meta.end),
+      desc: meta.description,
+      in_loc: ride.locationName,
+    });
+    return `https://calendar.yahoo.com/?${params.toString()}`;
   }
 
   if (loading) {
@@ -358,12 +420,60 @@ export default function GroupRideDetailClient({ id }: { id: string }) {
                 {copied ? "✓ Copied" : "Copy share link"}
               </button>
               {!isPast && (
-                <button
-                  onClick={addToCalendar}
-                  className="flex-1 rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-300 hover:bg-gray-800 transition-colors"
-                >
-                  📅 Add to calendar
-                </button>
+                <div className="relative flex-1">
+                  <button
+                    onClick={() => setShowCal((v) => !v)}
+                    className="w-full rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-300 hover:bg-gray-800 transition-colors"
+                  >
+                    📅 Add to calendar
+                  </button>
+                  {showCal && (
+                    <div
+                      className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-lg border border-gray-700 bg-gray-900 shadow-xl"
+                      onMouseLeave={() => setShowCal(false)}
+                    >
+                      {googleCalendarUrl() && (
+                        <a
+                          href={googleCalendarUrl()!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setShowCal(false)}
+                          className="block px-3 py-2 text-left text-xs text-gray-200 hover:bg-gray-800"
+                        >
+                          Google Calendar
+                        </a>
+                      )}
+                      {outlookCalendarUrl() && (
+                        <a
+                          href={outlookCalendarUrl()!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setShowCal(false)}
+                          className="block px-3 py-2 text-left text-xs text-gray-200 hover:bg-gray-800"
+                        >
+                          Outlook
+                        </a>
+                      )}
+                      {yahooCalendarUrl() && (
+                        <a
+                          href={yahooCalendarUrl()!}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => setShowCal(false)}
+                          className="block px-3 py-2 text-left text-xs text-gray-200 hover:bg-gray-800"
+                        >
+                          Yahoo
+                        </a>
+                      )}
+                      <button
+                        onClick={addToCalendar}
+                        className="block w-full px-3 py-2 text-left text-xs text-gray-200 hover:bg-gray-800"
+                      >
+                        Apple / Zoho / iCal (.ics)
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
               {ride.isCreator && !isPast && (
                 <button

@@ -34,6 +34,7 @@ function typeLabel(t: MedicalResult["type"]): { text: string; color: string } {
 export default function HospitalsClient() {
   const [zip, setZip] = useState("");
   const [loading, setLoading] = useState(false);
+  const [refining, setRefining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [place, setPlace] = useState<GeoResult | null>(null);
   const [results, setResults] = useState<MedicalResult[] | null>(null);
@@ -50,6 +51,7 @@ export default function HospitalsClient() {
     }
 
     setLoading(true);
+    setRefining(false);
     try {
       const geoRes = await fetch(`/api/geocode?q=${encodeURIComponent(zip.trim())}`);
       if (!geoRes.ok) throw new Error("Geocoding failed");
@@ -62,13 +64,33 @@ export default function HospitalsClient() {
       }
       setPlace(hit);
 
-      const medRes = await fetch(`/api/medical?lat=${hit.lat}&lng=${hit.lng}&radius=15`);
-      if (!medRes.ok) throw new Error("Medical lookup failed");
-      const medData = (await medRes.json()) as { medical: MedicalResult[] };
-      setResults(medData.medical ?? []);
+      // Two-pass fetch: paint Mapbox results first (~1s), then quietly refine
+      // with the OSM-augmented results when they arrive (~5s). The user gets
+      // something to look at while OSM catches up.
+      const fastRes = await fetch(
+        `/api/medical?lat=${hit.lat}&lng=${hit.lng}&radius=15&mode=fast`
+      );
+      if (!fastRes.ok) throw new Error("Medical lookup failed");
+      const fastData = (await fastRes.json()) as { medical: MedicalResult[] };
+      setResults(fastData.medical ?? []);
+      setLoading(false);
+
+      setRefining(true);
+      try {
+        const fullRes = await fetch(
+          `/api/medical?lat=${hit.lat}&lng=${hit.lng}&radius=15&mode=full`
+        );
+        if (fullRes.ok) {
+          const fullData = (await fullRes.json()) as { medical: MedicalResult[] };
+          if ((fullData.medical?.length ?? 0) > 0) {
+            setResults(fullData.medical);
+          }
+        }
+      } finally {
+        setRefining(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
       setLoading(false);
     }
   }
@@ -103,9 +125,32 @@ export default function HospitalsClient() {
       )}
 
       {place && (
-        <div className="mb-4 text-sm text-gray-400">
-          Showing results near <span className="text-white">{place.display}</span>
+        <div className="mb-4 flex items-center justify-between gap-3 text-sm text-gray-400">
+          <div>
+            Showing results near <span className="text-white">{place.display}</span>
+          </div>
+          {refining && (
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-gray-700 border-t-sky-400" />
+              Refining…
+            </div>
+          )}
         </div>
+      )}
+
+      {loading && !results && (
+        <ul className="space-y-3" aria-label="Loading hospital results">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <li
+              key={i}
+              className="rounded-lg border border-gray-800 bg-gray-900/40 p-4"
+            >
+              <div className="h-4 w-2/3 animate-pulse rounded bg-gray-800" />
+              <div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-gray-800/70" />
+              <div className="mt-3 h-3 w-1/3 animate-pulse rounded bg-gray-800/50" />
+            </li>
+          ))}
+        </ul>
       )}
 
       {results && results.length === 0 && (

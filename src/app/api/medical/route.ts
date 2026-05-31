@@ -8,15 +8,19 @@ export const revalidate = 0;
 export const maxDuration = 15;
 
 const MEDICAL_LIMIT = 5;
-const PER_SOURCE_TIMEOUT_MS = 12_000;
+// OSM Overpass is the slowest source and the one most likely to hang under
+// load. We give it 5s in full mode — if it makes it, great; if not, Mapbox
+// alone covers the vast majority of US hospitals and urgent cares.
+const OSM_TIMEOUT_MS = 5_000;
+const MAPBOX_TIMEOUT_MS = 4_000;
 
-function withTimeout<T>(p: Promise<T>, fallback: T, label: string): Promise<T> {
+function withTimeout<T>(p: Promise<T>, fallback: T, label: string, ms: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeoutP = new Promise<T>((resolve) => {
     timer = setTimeout(() => {
-      console.error(`[medical] ${label} timed out after ${PER_SOURCE_TIMEOUT_MS}ms`);
+      console.error(`[medical] ${label} timed out after ${ms}ms`);
       resolve(fallback);
-    }, PER_SOURCE_TIMEOUT_MS);
+    }, ms);
   });
   const wrapped = p.catch((err) => {
     console.error(`[medical] ${label} rejected:`, err);
@@ -45,14 +49,24 @@ export async function GET(req: NextRequest) {
   const lat = parseFloat(searchParams.get("lat") ?? "");
   const lng = parseFloat(searchParams.get("lng") ?? "");
   const radiusMi = parseFloat(searchParams.get("radius") ?? "15");
+  // mode=fast skips OSM entirely so the client can paint Mapbox results in
+  // ~1s and then call again with mode=full for richer coverage.
+  const mode = searchParams.get("mode") ?? "full";
 
   if (isNaN(lat) || isNaN(lng)) {
     return NextResponse.json({ error: "lat and lng required" }, { status: 400 });
   }
 
   const [osmC, mapboxC] = await Promise.all([
-    withTimeout(fetchOsmMedical(lat, lng, radiusMi), [], "osmMedical"),
-    withTimeout(fetchMapboxMedical(lat, lng, Math.min(radiusMi, 10)), [], "mapboxMedical"),
+    mode === "fast"
+      ? Promise.resolve([])
+      : withTimeout(fetchOsmMedical(lat, lng, radiusMi), [], "osmMedical", OSM_TIMEOUT_MS),
+    withTimeout(
+      fetchMapboxMedical(lat, lng, Math.min(radiusMi, 10)),
+      [],
+      "mapboxMedical",
+      MAPBOX_TIMEOUT_MS
+    ),
   ]);
 
   const seen = new Set<string>();

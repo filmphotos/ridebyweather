@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { EBIKE_LAWS, FEDERAL_LAND_SUMMARY, type StateEbikeLaw } from "@/lib/ebikeLaws";
+import {
+  EBIKE_LAWS,
+  FEDERAL_LAND_SUMMARY,
+  SOURCE_LINKS,
+  LAWS_LAST_REVIEWED,
+  type StateEbikeLaw,
+} from "@/lib/ebikeLaws";
 
 export const metadata: Metadata = {
   title: "E-Bike Laws by State — RideByWeather",
@@ -49,7 +55,33 @@ export default function EbikeLawsPage() {
           before traveling: cities, parks, and HOAs frequently impose stricter rules.
         </p>
         <p className="mt-2 text-xs text-amber-400/80 italic">
-          Informational only — not legal advice. Last reviewed May 2026.
+          Informational only — not legal advice. Dataset last reviewed {LAWS_LAST_REVIEWED}. For
+          authoritative law: see the{" "}
+          <a
+            href={SOURCE_LINKS.peopleForBikesGuide}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sky-400 underline hover:text-sky-300 not-italic"
+          >
+            PeopleForBikes state guide
+          </a>{" "}
+          and the{" "}
+          <a
+            href={SOURCE_LINKS.ncslTracker}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sky-400 underline hover:text-sky-300 not-italic"
+          >
+            NCSL legislation tracker
+          </a>
+          . See something wrong?{" "}
+          <a
+            href="mailto:corrections@ridebyweather.com?subject=E-bike%20laws%20correction"
+            className="text-sky-400 underline hover:text-sky-300 not-italic"
+          >
+            Report a correction
+          </a>
+          .
         </p>
       </div>
 
@@ -201,6 +233,33 @@ export default function EbikeLawsPage() {
                   <div>
                     <div className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-1">Notes</div>
                     <p className="text-gray-300">{law.notes}</p>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-800 pt-3 text-xs">
+                    <span className="text-gray-500">Verify with:</span>
+                    <a
+                      href={SOURCE_LINKS.peopleForBikesGuide}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sky-400 hover:underline"
+                    >
+                      PeopleForBikes
+                    </a>
+                    <span className="text-gray-700">·</span>
+                    <a
+                      href={SOURCE_LINKS.ncslTracker}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sky-400 hover:underline"
+                    >
+                      NCSL tracker
+                    </a>
+                    <span className="text-gray-700">·</span>
+                    <a
+                      href={`mailto:corrections@ridebyweather.com?subject=${encodeURIComponent(`E-bike law correction — ${law.state}`)}`}
+                      className="text-gray-400 hover:text-sky-300"
+                    >
+                      Report a correction
+                    </a>
                   </div>
                 </div>
               </details>

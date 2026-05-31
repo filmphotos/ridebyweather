@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import SportStoresClient from "./SportStoresClient";
 
 export const metadata: Metadata = {
-  title: "Running Stores & Stops — RideByWeather",
+  title: "Running Shoe Stores — RideByWeather",
   description:
-    "Find running specialty stores, gyms, water, and rest stops near your route or current location.",
+    "Find specialty running shoe stores near you — gait analysis, fitting, and the right shoes for road or trail.",
 };
 
 export default function RunStoresPage() {

@@ -17,11 +17,11 @@ export default function SportStoresClient({ variant }: { variant: "running" | "w
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">
-            {isWalking ? "Walking" : "Running"} Stores &amp; Stops
+            {isWalking ? "Walking" : "Running"} Shoe Stores
           </h1>
           <p className="mt-1 text-sm text-gray-400 max-w-xl">
-            Find running specialty stores, gyms, water, and rest stops near you — gait analysis,
-            shoes, and refuels on the route.
+            Specialty running and athletic shoe stores near you — gait analysis, fitting,
+            and the right shoes for the road or trail.
           </p>
           {location?.name && <p className="mt-1 text-sm text-gray-500">{location.name}</p>}
         </div>

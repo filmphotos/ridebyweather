@@ -3,9 +3,9 @@ import type { Metadata } from "next";
 import SportStoresClient from "../run-stores/SportStoresClient";
 
 export const metadata: Metadata = {
-  title: "Walking Stores & Stops — RideByWeather",
+  title: "Walking Shoe Stores — RideByWeather",
   description:
-    "Find specialty stores, gyms, water, and rest stops near your route or current location for walks.",
+    "Find specialty walking and athletic shoe stores near you — fitting, gait analysis, and the right shoes for daily walks.",
 };
 
 export default function WalkStoresPage() {
