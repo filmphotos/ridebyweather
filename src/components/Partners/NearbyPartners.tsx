@@ -20,6 +20,10 @@ interface Props {
   lat: number;
   lng: number;
   sport?: "cycling" | "running";
+  // Dedicated /bike-shops and /run-stores pages set this false so only the
+  // shop listings render. Dashboards leave it true to also surface nearby
+  // medical and restaurant stops.
+  extras?: boolean;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -132,7 +136,7 @@ function PartnerRow({ p }: { p: Partner }) {
   );
 }
 
-export default function NearbyPartners({ lat, lng, sport = "cycling" }: Props) {
+export default function NearbyPartners({ lat, lng, sport = "cycling", extras = true }: Props) {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [medical, setMedical] = useState<Partner[]>([]);
   const [restaurants, setRestaurants] = useState<Partner[]>([]);
@@ -195,28 +199,32 @@ export default function NearbyPartners({ lat, lng, sport = "cycling" }: Props) {
         </>
       )}
 
-      <div className={`flex items-center justify-between mb-3 ${partners.length > 0 ? "mt-5 pt-4 border-t border-gray-800" : ""}`}>
-        <h3 className="font-semibold text-white">Nearby Medical</h3>
-        <span className="text-xs text-gray-500">hospitals & urgent care</span>
-      </div>
-      {medical.length > 0 ? (
-        <div className="space-y-2">
-          {medical.map((m) => <PartnerRow key={m.id} p={m} />)}
-        </div>
-      ) : (
-        <p className="text-xs text-gray-500">No hospitals or urgent care found within 25 mi.</p>
-      )}
+      {extras && (
+        <>
+          <div className={`flex items-center justify-between mb-3 ${partners.length > 0 ? "mt-5 pt-4 border-t border-gray-800" : ""}`}>
+            <h3 className="font-semibold text-white">Nearby Medical</h3>
+            <span className="text-xs text-gray-500">hospitals & urgent care</span>
+          </div>
+          {medical.length > 0 ? (
+            <div className="space-y-2">
+              {medical.map((m) => <PartnerRow key={m.id} p={m} />)}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500">No hospitals or urgent care found within 25 mi.</p>
+          )}
 
-      <div className="flex items-center justify-between mb-3 mt-5 pt-4 border-t border-gray-800">
-        <h3 className="font-semibold text-white">Nearby Restaurants</h3>
-        <span className="text-xs text-gray-500">restaurants & cafes</span>
-      </div>
-      {restaurants.length > 0 ? (
-        <div className="space-y-2">
-          {restaurants.map((r) => <PartnerRow key={r.id} p={r} />)}
-        </div>
-      ) : (
-        <p className="text-xs text-gray-500">No restaurants or cafes found within 25 mi.</p>
+          <div className="flex items-center justify-between mb-3 mt-5 pt-4 border-t border-gray-800">
+            <h3 className="font-semibold text-white">Nearby Restaurants</h3>
+            <span className="text-xs text-gray-500">restaurants & cafes</span>
+          </div>
+          {restaurants.length > 0 ? (
+            <div className="space-y-2">
+              {restaurants.map((r) => <PartnerRow key={r.id} p={r} />)}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500">No restaurants or cafes found within 25 mi.</p>
+          )}
+        </>
       )}
     </div>
   );

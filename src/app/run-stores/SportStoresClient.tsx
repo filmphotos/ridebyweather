@@ -30,7 +30,7 @@ export default function SportStoresClient({ variant }: { variant: "running" | "w
 
       {location ? (
         // Walking shares the running partner set (specialty stores serve both).
-        <NearbyPartners lat={location.lat} lng={location.lng} sport="running" />
+        <NearbyPartners lat={location.lat} lng={location.lng} sport="running" extras={false} />
       ) : (
         <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
           <div className="text-6xl">{isWalking ? "🚶" : "🏃"}</div>

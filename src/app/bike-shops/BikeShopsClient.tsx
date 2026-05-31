@@ -26,7 +26,7 @@ export default function BikeShopsClient() {
       </div>
 
       {location ? (
-        <NearbyPartners lat={location.lat} lng={location.lng} sport="cycling" />
+        <NearbyPartners lat={location.lat} lng={location.lng} sport="cycling" extras={false} />
       ) : (
         <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">
           <div className="text-6xl">🏪</div>
